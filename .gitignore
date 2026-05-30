@@ -1,0 +1,124 @@
+# ═══════════════════════════════════════════════════════
+#  .gitignore — Go Backend + React/Vite Frontend (Monorepo)
+# ═══════════════════════════════════════════════════════
+
+# ───────────────────────────────────────────────────────
+# Environment & Secrets
+# ───────────────────────────────────────────────────────
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+
+# ───────────────────────────────────────────────────────
+# Go Backend
+# ───────────────────────────────────────────────────────
+# Compiled binaries
+backend/idp-backend
+backend/idp-backend.exe
+backend/*.exe
+backend/*.out
+backend/*.test
+backend/*.prof
+
+# Go build cache & test artifacts
+/backend/vendor/
+/backend/tmp/
+
+# Air live reload
+backend/.air.toml
+backend/tmp/
+
+# ───────────────────────────────────────────────────────
+# Node / Frontend
+# ───────────────────────────────────────────────────────
+frontend/node_modules/
+frontend/dist/
+frontend/.cache/
+frontend/.parcel-cache/
+frontend/.vite/
+
+# Package lock files (choose one to keep, comment the other)
+# frontend/package-lock.json
+# frontend/yarn.lock
+# frontend/pnpm-lock.yaml
+
+# ───────────────────────────────────────────────────────
+# Logs
+# ───────────────────────────────────────────────────────
+*.log
+*.log.*
+logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ───────────────────────────────────────────────────────
+# OS & System Files
+# ───────────────────────────────────────────────────────
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+Desktop.ini
+$RECYCLE.BIN/
+*.lnk
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+.Spotlight-V100
+.Trashes
+
+# Linux
+*~
+
+# ───────────────────────────────────────────────────────
+# IDE & Editors
+# ───────────────────────────────────────────────────────
+# VSCode
+.vscode/
+!.vscode/extensions.json
+!.vscode/settings.json.example
+
+# JetBrains (GoLand, WebStorm, etc.)
+.idea/
+*.iml
+*.iws
+*.ipr
+
+# Vim / Neovim
+*.swp
+*.swo
+*~
+.netrwhist
+
+# Emacs
+\#*\#
+.\#*
+
+# ───────────────────────────────────────────────────────
+# Database & Storage
+# ───────────────────────────────────────────────────────
+*.db
+*.sqlite
+*.sqlite3
+data/
+
+# ───────────────────────────────────────────────────────
+# Misc
+# ───────────────────────────────────────────────────────
+*.bak
+*.tmp
+*.temp
+.DS_Store
+coverage/
+*.coverage

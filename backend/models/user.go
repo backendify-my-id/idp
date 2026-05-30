@@ -31,7 +31,7 @@ type Profile struct {
 
 type Role struct {
 	ID        int       `gorm:"primaryKey;autoIncrement"`
-	RoleName  string    `gorm:"type:varchar(50);uniqueIndex;not null"`
+	RoleName  string    `gorm:"type:varchar(50);uniqueIndex;not null"` // admin, user, idp_support, developer
 	CreatedAt time.Time `gorm:"default:CURRENT_TIMESTAMP"`
 	UpdatedAt time.Time `gorm:"default:CURRENT_TIMESTAMP"`
 }

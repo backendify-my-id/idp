@@ -27,6 +27,27 @@ func NewAuthController() *AuthController {
 	}
 }
 
+// getLocalString safely extracts a string from fiber.Ctx.Locals.
+// Returns empty string if key is missing or not a string — prevents panic.
+func getLocalString(c *fiber.Ctx, key string) string {
+	v := c.Locals(key)
+	if v == nil {
+		return ""
+	}
+	if s, ok := v.(string); ok {
+		return s
+	}
+	return ""
+}
+
+// appURL returns the base URL of this IdP from env, defaulting to localhost.
+func appURL() string {
+	if u := os.Getenv("APP_URL"); u != "" {
+		return u
+	}
+	return "http://localhost:8800"
+}
+
 type RegisterRequest struct {
 	Email    string `json:"email"`
 	Password string `json:"password"`
@@ -130,8 +151,13 @@ func (c *AuthController) ResendOTP(ctx *fiber.Ctx) error {
 	return utils.SendSuccess(ctx, fiber.StatusOK, "Verification code resent successfully. Please check your email.", nil)
 }
 
+type LoginRequest struct {
+	Email    string `json:"email"`
+	Password string `json:"password"`
+}
+
 func (c *AuthController) Login(ctx *fiber.Ctx) error {
-	var req RegisterRequest
+	var req LoginRequest
 	if err := ctx.BodyParser(&req); err != nil {
 		return utils.SendError(ctx, fiber.StatusBadRequest, "Invalid request payload")
 	}
@@ -435,7 +461,10 @@ func (c *AuthController) Token(ctx *fiber.Ctx) error {
 }
 
 func (c *AuthController) UserInfo(ctx *fiber.Ctx) error {
-	userIDStr := ctx.Locals("user_id").(string)
+	userIDStr := getLocalString(ctx, "user_id")
+	if userIDStr == "" {
+		return utils.SendError(ctx, fiber.StatusUnauthorized, "Unauthorized")
+	}
 
 	var user models.User
 	if err := config.DB.Preload("Profile").Where("id = ?", userIDStr).First(&user).Error; err != nil {
@@ -470,14 +499,19 @@ type UpdateProfileRequest struct {
 }
 
 func (c *AuthController) GetProfile(ctx *fiber.Ctx) error {
-	userID := ctx.Locals("user_id").(string)
+	userID := getLocalString(ctx, "user_id")
+	if userID == "" {
+		return utils.SendError(ctx, fiber.StatusUnauthorized, "Unauthorized")
+	}
 	profile, err := c.authService.GetUserProfile(userID)
 	if err != nil {
 		return utils.SendError(ctx, fiber.StatusNotFound, err.Error())
 	}
 
 	var user models.User
-	config.DB.Where("id = ?", userID).First(&user)
+	if err := config.DB.Where("id = ?", userID).First(&user).Error; err != nil {
+		return utils.SendError(ctx, fiber.StatusNotFound, "User not found")
+	}
 
 	roles, err := c.authService.GetUserRoles(user.ID)
 	if err != nil {
@@ -495,7 +529,10 @@ func (c *AuthController) GetProfile(ctx *fiber.Ctx) error {
 
 
 func (c *AuthController) UpdateProfile(ctx *fiber.Ctx) error {
-	userID := ctx.Locals("user_id").(string)
+	userID := getLocalString(ctx, "user_id")
+	if userID == "" {
+		return utils.SendError(ctx, fiber.StatusUnauthorized, "Unauthorized")
+	}
 	
 	var req UpdateProfileRequest
 	if err := ctx.BodyParser(&req); err != nil {
@@ -512,11 +549,17 @@ func (c *AuthController) UpdateProfile(ctx *fiber.Ctx) error {
 
 
 func (c *AuthController) OpenIDConfiguration(ctx *fiber.Ctx) error {
+	base := appURL()
 	return ctx.JSON(fiber.Map{
-		"issuer":                 "http://localhost:8800",
-		"authorization_endpoint": "http://localhost:8800/authorize",
-		"token_endpoint":         "http://localhost:8800/token",
-		"userinfo_endpoint":      "http://localhost:8800/userinfo",
+		"issuer":                                base,
+		"authorization_endpoint":                base + "/authorize",
+		"token_endpoint":                        base + "/token",
+		"userinfo_endpoint":                     base + "/userinfo",
+		"jwks_uri":                              base + "/.well-known/jwks.json",
+		"response_types_supported":              []string{"code"},
+		"subject_types_supported":               []string{"public"},
+		"id_token_signing_alg_values_supported": []string{"HS256"},
+		"scopes_supported":                      []string{"openid", "email", "profile", "roles"},
 	})
 }
 
@@ -530,8 +573,11 @@ type MfaLoginRequest struct {
 }
 
 func (c *AuthController) SetupMfa(ctx *fiber.Ctx) error {
-	userID := ctx.Locals("user_id").(string)
-	email := ctx.Locals("email").(string)
+	userID := getLocalString(ctx, "user_id")
+	email := getLocalString(ctx, "email")
+	if userID == "" {
+		return utils.SendError(ctx, fiber.StatusUnauthorized, "Unauthorized")
+	}
 
 	secret, url, err := c.authService.GenerateMfaSetup(userID, email)
 	if err != nil {
@@ -545,7 +591,10 @@ func (c *AuthController) SetupMfa(ctx *fiber.Ctx) error {
 }
 
 func (c *AuthController) EnableMfa(ctx *fiber.Ctx) error {
-	userID := ctx.Locals("user_id").(string)
+	userID := getLocalString(ctx, "user_id")
+	if userID == "" {
+		return utils.SendError(ctx, fiber.StatusUnauthorized, "Unauthorized")
+	}
 
 	var req MfaCodeRequest
 	if err := ctx.BodyParser(&req); err != nil {
@@ -565,7 +614,10 @@ func (c *AuthController) EnableMfa(ctx *fiber.Ctx) error {
 }
 
 func (c *AuthController) DisableMfa(ctx *fiber.Ctx) error {
-	userID := ctx.Locals("user_id").(string)
+	userID := getLocalString(ctx, "user_id")
+	if userID == "" {
+		return utils.SendError(ctx, fiber.StatusUnauthorized, "Unauthorized")
+	}
 
 	var req MfaCodeRequest
 	if err := ctx.BodyParser(&req); err != nil {
@@ -829,7 +881,7 @@ func (c *AuthController) UpdateUserRole(ctx *fiber.Ctx) error {
 		return utils.SendError(ctx, fiber.StatusBadRequest, "Role name is required")
 	}
 
-	adminUserID := ctx.Locals("user_id").(string)
+	adminUserID := getLocalString(ctx, "user_id")
 	if adminUserID == id && req.RoleName == "admin" && !req.Assign {
 		return utils.SendError(ctx, fiber.StatusBadRequest, "You cannot revoke your own admin role")
 	}
@@ -854,7 +906,16 @@ func (c *AuthController) UpdateUserStatus(ctx *fiber.Ctx) error {
 		return utils.SendError(ctx, fiber.StatusBadRequest, "Invalid request payload")
 	}
 
-	adminUserID := ctx.Locals("user_id").(string)
+	if req.Status == "" {
+		return utils.SendError(ctx, fiber.StatusBadRequest, "Status is required")
+	}
+
+	allowedStatuses := map[string]bool{"active": true, "suspended": true, "banned": true}
+	if !allowedStatuses[req.Status] {
+		return utils.SendError(ctx, fiber.StatusBadRequest, "Invalid status. Allowed values: active, suspended, banned")
+	}
+
+	adminUserID := getLocalString(ctx, "user_id")
 	if adminUserID == id && req.Status != "active" {
 		return utils.SendError(ctx, fiber.StatusBadRequest, "You cannot ban or suspend your own admin account")
 	}
@@ -867,6 +928,5 @@ func (c *AuthController) UpdateUserStatus(ctx *fiber.Ctx) error {
 
 	return utils.SendSuccess(ctx, fiber.StatusOK, "User status updated successfully", nil)
 }
-
 
 

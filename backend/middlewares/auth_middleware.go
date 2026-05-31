@@ -37,8 +37,10 @@ func AuthMiddleware(c *fiber.Ctx) error {
 		return utils.SendError(c, fiber.StatusUnauthorized, "Invalid token claims")
 	}
 
-	c.Locals("user_id", claims["sub"])
-	c.Locals("email", claims["email"])
+	userID, _ := claims["sub"].(string)
+	email, _ := claims["email"].(string)
+	c.Locals("user_id", userID)
+	c.Locals("email", email)
 	c.Locals("roles", claims["roles"])
 
 	return c.Next()

@@ -8,13 +8,18 @@ export const ThemeProvider = ({ children }) => {
     if (savedTheme) {
       return savedTheme;
     }
-    // Fallback to system preference if no user preference is saved yet
     const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
     return systemPrefersDark ? 'dark' : 'light';
   });
 
   useEffect(() => {
     localStorage.setItem('theme', theme);
+    const root = window.document.documentElement;
+    if (theme === 'dark') {
+      root.classList.add('dark');
+    } else {
+      root.classList.remove('dark');
+    }
   }, [theme]);
 
   const toggleTheme = () => {

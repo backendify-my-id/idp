@@ -91,30 +91,19 @@ func (s *AuthService) AuthenticateUser(email, password string) (*models.User, er
 }
 
 func (s *AuthService) GetUserRoles(userID uuid.UUID) ([]string, error) {
-	var userRoles []models.UserRole
-	if err := config.DB.Where("user_id = ?", userID).Find(&userRoles).Error; err != nil {
+	var roleNames []string
+	err := config.DB.
+		Table("roles").
+		Select("roles.role_name").
+		Joins("INNER JOIN user_roles ON user_roles.role_id = roles.id").
+		Where("user_roles.user_id = ?", userID).
+		Pluck("role_name", &roleNames).Error
+	if err != nil {
 		return nil, err
 	}
-
-	var roleIDs []int
-	for _, ur := range userRoles {
-		roleIDs = append(roleIDs, ur.RoleID)
-	}
-
-	if len(roleIDs) == 0 {
+	if roleNames == nil {
 		return []string{}, nil
 	}
-
-	var roles []models.Role
-	if err := config.DB.Where("id IN ?", roleIDs).Find(&roles).Error; err != nil {
-		return nil, err
-	}
-
-	var roleNames []string
-	for _, r := range roles {
-		roleNames = append(roleNames, r.RoleName)
-	}
-
 	return roleNames, nil
 }
 

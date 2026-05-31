@@ -46,8 +46,8 @@ const AlertModal = ({ isOpen, onClose, title, message, type = 'info' }) => {
     <div className="fixed inset-0 flex items-center justify-center z-[9999] bg-slate-950/40 dark:bg-slate-950/60 backdrop-blur-sm p-4 animate-fade-in">
       <div className={`p-8 rounded-3xl border bg-white dark:bg-[#0f172a] shadow-2xl max-w-sm w-full text-center relative overflow-hidden transform transition-transform duration-300 animate-scale-up ${current.borderColor}`}>
         {/* Subtle decorative glowing background */}
-        <div className={`absolute -top-10 -left-10 w-24 h-24 rounded-full filter blur-xl opacity-30 ${type === 'success' ? 'bg-emerald-450' : (type === 'error' ? 'bg-rose-450' : 'bg-indigo-450')}`}></div>
-        <div className={`absolute -bottom-10 -right-10 w-24 h-24 rounded-full filter blur-xl opacity-30 ${type === 'success' ? 'bg-emerald-450' : (type === 'error' ? 'bg-rose-450' : 'bg-indigo-450')}`}></div>
+        <div className={`absolute -top-10 -left-10 w-24 h-24 rounded-full filter blur-xl opacity-30 ${type === 'success' ? 'bg-emerald-400' : (type === 'error' ? 'bg-rose-400' : 'bg-indigo-400')}`}></div>
+        <div className={`absolute -bottom-10 -right-10 w-24 h-24 rounded-full filter blur-xl opacity-30 ${type === 'success' ? 'bg-emerald-400' : (type === 'error' ? 'bg-rose-400' : 'bg-indigo-400')}`}></div>
 
         <div className="relative z-10">
           {current.icon}

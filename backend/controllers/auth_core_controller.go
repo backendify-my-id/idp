@@ -260,7 +260,7 @@ func (c *AuthController) Logout(ctx *fiber.Ctx) error {
 			if claims, ok := token.Claims.(jwt.MapClaims); ok {
 				if jti, ok := claims["jti"].(string); ok && jti != "" {
 					if expVal, ok := claims["exp"].(float64); ok {
-						remaining := time.Unix(int64(expVal), 0).Sub(time.Now())
+						remaining := time.Until(time.Unix(int64(expVal), 0))
 						if remaining > 0 {
 							redisCtx := context.Background()
 							config.RedisClient.Set(redisCtx, "blacklist:jwt:"+jti, "1", remaining)

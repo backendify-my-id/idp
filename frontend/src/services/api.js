@@ -107,3 +107,6 @@ export const updateUserRole = (token, id, roleName, assign) =>
 
 export const updateUserStatus = (token, id, status) =>
   apiClient.put(`/admin/users/${id}/status`, { status }, authConfig(token));
+
+export const deleteUser = (token, id) =>
+  apiClient.delete(`/admin/users/${id}`, authConfig(token));

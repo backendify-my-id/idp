@@ -99,6 +99,7 @@ type RefreshToken struct {
 	UserAgent string     `gorm:"type:text"`
 	IpAddress string     `gorm:"type:varchar(45)"`
 	ExpiresAt time.Time  `gorm:"not null"`
+	Revoked   bool       `gorm:"default:false"`
 	CreatedAt time.Time  `gorm:"default:CURRENT_TIMESTAMP"`
 	UpdatedAt time.Time  `gorm:"default:CURRENT_TIMESTAMP"`
 	User      User       `gorm:"constraint:OnDelete:CASCADE;"`
@@ -116,4 +117,13 @@ type UserAuthorization struct {
 	User      User      `gorm:"constraint:OnDelete:CASCADE;"`
 	Client    Client    `gorm:"constraint:OnDelete:CASCADE;"`
 	Scope     Scope     `gorm:"constraint:OnDelete:CASCADE;"`
+}
+
+type MfaBackupCode struct {
+	ID        int       `gorm:"primaryKey;autoIncrement"`
+	UserID    uuid.UUID `gorm:"type:uuid;not null"`
+	CodeHash  string    `gorm:"type:text;not null"`
+	Used      bool      `gorm:"default:false"`
+	CreatedAt time.Time `gorm:"default:CURRENT_TIMESTAMP"`
+	User      User      `gorm:"constraint:OnDelete:CASCADE;"`
 }

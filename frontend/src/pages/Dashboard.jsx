@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { io } from 'socket.io-client';
 import { getProfile, updateProfile, getMfaSetup, enableMfa, disableMfa,
-  getClients, createClient, deleteClient, getUsers, updateUserRole, updateUserStatus 
+  getClients, createClient, deleteClient, getUsers, updateUserRole, updateUserStatus, deleteUser 
 } from '../services/api';
 import AlertModal from '../components/AlertModal';
 import DashboardLayout from '../layouts/DashboardLayout';
@@ -106,7 +105,7 @@ const Dashboard = ({ token, onLogout }) => {
     if (res.success) setUsersList(res.data || []);
   };
 
-  // Real-Time Socket.io Connection & Stream emulator Fallback
+  // Real-Time WebSocket Connection & Stream emulator Fallback
   useEffect(() => {
     const now = new Date();
     const initialData = Array.from({ length: 12 }, (_, i) => {
@@ -115,28 +114,36 @@ const Dashboard = ({ token, onLogout }) => {
     });
     setRealtimeData(initialData);
 
-    socketRef.current = io('http://localhost:8800', {
-      transports: ['websocket'],
-      timeout: 5000,
-      reconnectionAttempts: 3
-    });
+    const wsUrl = 'ws://localhost:8800/ws';
+    const ws = new WebSocket(wsUrl);
+    socketRef.current = ws;
 
-    socketRef.current.on('connect', () => {
+    ws.onopen = () => {
       setSocketStatus('connected');
-      addWsLog('Real-time tunnel connected to backend WS server.');
-    });
+      addWsLog('Real-time native WebSocket tunnel connected to backend.');
+    };
 
-    socketRef.current.on('connect_error', () => {
+    ws.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        handleNewDataPoint(data.requests, data.sessions);
+      } catch (err) {
+        console.error('Error parsing WS message:', err);
+      }
+    };
+
+    ws.onerror = () => {
+      setSocketStatus('fallback');
+    };
+
+    ws.onclose = () => {
       setSocketStatus('fallback');
       addWsLog('Go WS server offline. Launching fallback real-time emulator...');
-    });
-
-    socketRef.current.on('system_activity', (data) => {
-      handleNewDataPoint(data.requests, data.sessions);
-    });
+    };
 
     fallbackIntervalRef.current = setInterval(() => {
-      if (socketRef.current && !socketRef.current.connected) {
+      // If WebSocket is not in open state (readyState === 1 is OPEN), run dummy telemetry
+      if (!socketRef.current || socketRef.current.readyState !== 1) {
         const dummyReqs = Math.floor(Math.random() * 30) + 8;
         const dummySessions = Math.max(1, activeSessions + (Math.random() > 0.55 ? 1 : -1));
         handleNewDataPoint(dummyReqs, dummySessions);
@@ -144,7 +151,9 @@ const Dashboard = ({ token, onLogout }) => {
     }, 3000);
 
     return () => {
-      if (socketRef.current) socketRef.current.disconnect();
+      if (socketRef.current) {
+        socketRef.current.close();
+      }
       clearInterval(fallbackIntervalRef.current);
     };
   }, [activeSessions]);
@@ -317,11 +326,30 @@ const Dashboard = ({ token, onLogout }) => {
     }
   };
 
-  const handleStatusToggleClick = async (id, currentStatus) => {
-    const nextStatus = currentStatus === 'active' ? 'suspended' : 'active';
-    const res = await updateUserStatus(token, id, nextStatus);
+  const handleStatusChange = async (id, newStatus) => {
+    const res = await updateUserStatus(token, id, newStatus);
     if (res.success) {
-      setAlert({ isOpen: true, title: 'Status Modified', message: `User status changed to ${nextStatus}.`, type: 'info' });
+      setAlert({
+        isOpen: true,
+        title: 'Status Updated',
+        message: `User status successfully set to ${newStatus}.`,
+        type: 'success'
+      });
+      fetchUsers();
+    } else {
+      setAlert({ isOpen: true, title: 'Error', message: res.message, type: 'error' });
+    }
+  };
+
+  const handleDeleteUser = async (id) => {
+    const res = await deleteUser(token, id);
+    if (res.success) {
+      setAlert({
+        isOpen: true,
+        title: 'User Deleted',
+        message: 'The user account has been successfully removed from the directory.',
+        type: 'info'
+      });
       fetchUsers();
     } else {
       setAlert({ isOpen: true, title: 'Error', message: res.message, type: 'error' });
@@ -426,7 +454,9 @@ const Dashboard = ({ token, onLogout }) => {
               isLoadingUsers={isLoadingUsers}
               currentUserId={userId}
               onRoleToggle={handleRoleToggleClick}
-              onStatusToggle={handleStatusToggleClick}
+              onStatusChange={handleStatusChange}
+              onDeleteUser={handleDeleteUser}
+              currentUserRoles={roles}
             />
           )}
         </>

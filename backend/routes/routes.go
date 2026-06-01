@@ -8,9 +8,19 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/limiter"
+	"github.com/gofiber/websocket/v2"
 )
 
 func SetupRoutes(app *fiber.App) {
+	// Real-time WebSocket Telemetry Route (Registered first to bypass global group auth middlewares)
+	app.Get("/ws", func(c *fiber.Ctx) error {
+		if websocket.IsWebSocketUpgrade(c) {
+			c.Locals("allowed", true)
+			return c.Next()
+		}
+		return fiber.ErrUpgradeRequired
+	}, websocket.New(controllers.HandleWebSocket))
+
 	authController := controllers.NewAuthController()
 
 	// General API Limiter: max 60 requests per minute per IP
@@ -53,6 +63,7 @@ func SetupRoutes(app *fiber.App) {
 	api.Post("/login", loginLimiter, authController.Login)
 	api.Post("/login/mfa", loginLimiter, authController.VerifyMfaLogin)
 	api.Post("/refresh", apiLimiter, authController.Refresh)
+	api.Post("/logout", authController.Logout) // Single Logout (SLO)
 
 	// OIDC & OAuth2 Endpoints
 	app.Get("/authorize", authController.Authorize)
@@ -69,6 +80,15 @@ func SetupRoutes(app *fiber.App) {
 	protected.Post("/api/mfa/enable", authController.EnableMfa)
 	protected.Post("/api/mfa/disable", authController.DisableMfa)
 
+	// User Active Sessions Management
+	protected.Get("/api/profile/sessions", authController.GetSessions)
+	protected.Delete("/api/profile/sessions/:id", authController.RevokeSession)
+	protected.Delete("/api/profile/sessions", authController.RevokeAllOtherSessions)
+
+	// Double-Verification Email Change Flow
+	protected.Post("/api/profile/email-change", authController.InitiateEmailChange)
+	protected.Post("/api/profile/email-change/confirm", authController.ConfirmEmailChange)
+
 	// Admin & Support Protected Endpoints
 	admin := app.Group("/api/admin")
 	admin.Use(middlewares.AuthMiddleware)
@@ -78,9 +98,10 @@ func SetupRoutes(app *fiber.App) {
 	admin.Post("/clients", middlewares.RequireRole("admin"), authController.CreateClient)
 	admin.Delete("/clients/:id", middlewares.RequireRole("admin"), authController.DeleteClient)
 	
-	// User directory management (admin or idp_support)
 	admin.Get("/users", middlewares.RequireRole("admin", "idp_support"), authController.GetUsers)
 	admin.Put("/users/:id/role", middlewares.RequireRole("admin"), authController.UpdateUserRole) // strictly admin
 	admin.Put("/users/:id/status", middlewares.RequireRole("admin", "idp_support"), authController.UpdateUserStatus) // support can ban/unban/suspend
+	admin.Put("/users/:id/unlock", middlewares.RequireRole("admin", "idp_support"), authController.UnlockUser)
+	admin.Delete("/users/:id", middlewares.RequireRole("admin"), authController.DeleteUser) // strictly admin delete
 }
 

@@ -61,6 +61,7 @@ func ConnectDatabase() {
 		&models.AuthorizationCode{},
 		&models.RefreshToken{},
 		&models.UserAuthorization{},
+		&models.MfaBackupCode{},
 	)
 	if err != nil {
 		log.Fatalf("Failed to migrate database: %v", err)

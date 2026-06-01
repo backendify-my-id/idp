@@ -141,22 +141,22 @@ const OidcClients = ({
               {clientsList.map((c) => (
                 <div
                   key={c.id}
-                  className="p-5 border border-slate-200/50 dark:border-slate-800/80 bg-white/40 dark:bg-slate-900/10 backdrop-blur rounded-2xl flex flex-col justify-between gap-4 shadow-sm hover:scale-[1.01] transition-transform"
+                  className="p-5 border border-slate-200/50 dark:border-slate-800/80 bg-white/40 dark:bg-slate-900/10 backdrop-blur rounded-2xl flex flex-col justify-between gap-4 shadow-sm hover:scale-[1.01] transition-transform min-w-0 overflow-hidden"
                 >
-                  <div className="space-y-3">
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <span className="font-extrabold text-sm text-slate-850 dark:text-white block">
+                  <div className="space-y-3 min-w-0">
+                    <div className="flex justify-between items-start gap-2">
+                      <div className="min-w-0">
+                        <span className="font-extrabold text-sm text-slate-850 dark:text-white block truncate">
                           {c.client_name}
                         </span>
-                        <code className="text-[9px] bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded text-indigo-500 dark:text-indigo-400 font-bold mt-1 inline-block">
+                        <code className="text-[9px] bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded text-indigo-500 dark:text-indigo-400 font-bold mt-1 inline-block truncate max-w-full">
                           {c.client_id}
                         </code>
                       </div>
                       
                       <button
                         onClick={() => onDeleteClient(c.id, c.client_name)}
-                        className="p-1 text-rose-450 hover:text-rose-600 transition-colors cursor-pointer"
+                        className="p-1 text-rose-450 hover:text-rose-600 transition-colors cursor-pointer shrink-0"
                         title="Delete Client Registry"
                       >
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
@@ -165,22 +165,22 @@ const OidcClients = ({
                       </button>
                     </div>
                     
-                    <div className="text-[9.5px] text-slate-500 font-semibold space-y-1.5 pt-2 border-t border-slate-100 dark:border-slate-800/40">
+                    <div className="text-[9.5px] text-slate-500 font-semibold space-y-1.5 pt-2 border-t border-slate-100 dark:border-slate-800/40 min-w-0">
                       <div className="flex items-center gap-1.5">
                         <span className="font-black text-slate-400">PKCE FLOW:</span>
                         <span className={`px-1.5 py-0.5 rounded text-[8px] font-extrabold border ${
                           c.is_pkce_required 
-                            ? 'bg-purple-50 text-purple-700 border-purple-100' 
-                            : 'bg-slate-50 text-slate-450 border-slate-200'
+                           ? 'bg-purple-50 text-purple-700 border-purple-100' 
+                           : 'bg-slate-50 text-slate-450 border-slate-200'
                         }`}>
                           {c.is_pkce_required ? 'ENFORCED' : 'OPTIONAL'}
                         </span>
                       </div>
-                      <div>
+                      <div className="min-w-0">
                         <span className="font-black text-slate-400 block mb-0.5">CALLBACK URIS:</span>
-                        <div className="space-y-0.5 font-mono text-[8.5px] truncate text-slate-600 dark:text-slate-350">
+                        <div className="space-y-0.5 font-mono text-[8.5px] truncate text-slate-600 dark:text-slate-350 min-w-0">
                           {c.redirect_urls?.map((url, i) => (
-                            <div key={i} className="truncate">• {url}</div>
+                            <div key={i} className="truncate max-w-full">• {url}</div>
                           ))}
                         </div>
                       </div>

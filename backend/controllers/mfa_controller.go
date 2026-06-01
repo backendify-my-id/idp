@@ -130,7 +130,11 @@ func (c *AuthController) VerifyMfaLogin(ctx *fiber.Ctx) error {
 		parsedUserID, errParse := uuid.Parse(userIDStr)
 		backupSuccess := false
 		if errParse == nil {
-			backupSuccess, _ = c.authService.VerifyBackupCode(parsedUserID, req.Code)
+			var errBackup error
+			backupSuccess, errBackup = c.authService.VerifyBackupCode(parsedUserID, req.Code)
+			if errBackup != nil {
+				backupSuccess = false
+			}
 		}
 
 		if !backupSuccess {

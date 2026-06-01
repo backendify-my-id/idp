@@ -89,6 +89,11 @@ func SetupRoutes(app *fiber.App) {
 	protected.Post("/api/profile/email-change", authController.InitiateEmailChange)
 	protected.Post("/api/profile/email-change/confirm", authController.ConfirmEmailChange)
 
+	// Notifications API
+	protected.Get("/api/notifications", authController.GetNotifications)
+	protected.Post("/api/notifications", authController.CreateNotification)
+	protected.Put("/api/notifications/read", authController.MarkAllNotificationsRead)
+
 	// Admin & Support Protected Endpoints
 	admin := app.Group("/api/admin")
 	admin.Use(middlewares.AuthMiddleware)

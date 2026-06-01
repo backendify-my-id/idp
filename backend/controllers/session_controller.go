@@ -93,7 +93,15 @@ func (c *AuthController) RevokeAllOtherSessions(ctx *fiber.Ctx) error {
 		return utils.SendError(ctx, fiber.StatusBadRequest, "Invalid user ID")
 	}
 
-	if err := c.authService.RevokeAllOtherSessions(userID, ""); err != nil {
+	sidStr := getLocalString(ctx, "sid")
+	var currentSessionID *uuid.UUID
+	if sidStr != "" {
+		if parsedSid, err := uuid.Parse(sidStr); err == nil {
+			currentSessionID = &parsedSid
+		}
+	}
+
+	if err := c.authService.RevokeAllOtherSessions(userID, currentSessionID); err != nil {
 		return utils.SendError(ctx, fiber.StatusBadRequest, "Failed to revoke other sessions")
 	}
 

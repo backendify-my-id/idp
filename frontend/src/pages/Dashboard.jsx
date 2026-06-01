@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { getProfile, updateProfile, getMfaSetup, enableMfa, disableMfa,
-  getClients, createClient, deleteClient, getUsers, updateUserRole, updateUserStatus, deleteUser 
+  getClients, createClient, deleteClient, getUsers, updateUserRole, updateUserStatus, deleteUser,
+  getNotifications, createNotification, markNotificationsRead
 } from '../services/api';
 import AlertModal from '../components/AlertModal';
 import DashboardLayout from '../layouts/DashboardLayout';
@@ -14,7 +15,13 @@ import IdentityUsers from './IdentityUsers';
 import DashboardOverview from './DashboardOverview';
 
 const Dashboard = ({ token, onLogout }) => {
-  const [activeTab, setActiveTab] = useState('dashboard');
+  const [activeTab, setActiveTab] = useState(() => {
+    return localStorage.getItem('idp_active_tab') || 'dashboard';
+  });
+
+  useEffect(() => {
+    localStorage.setItem('idp_active_tab', activeTab);
+  }, [activeTab]);
 
   // Real-time Socket & Telemetry States
   const [socketStatus, setSocketStatus] = useState('connecting');
@@ -41,6 +48,7 @@ const Dashboard = ({ token, onLogout }) => {
   const [mfaSetupData, setMfaSetupData] = useState({ secret: '', url: '' });
   const [mfaVerifyCode, setMfaVerifyCode] = useState('');
   const [isDisablingMfa, setIsDisablingMfa] = useState(false);
+  const [backupCodes, setBackupCodes] = useState([]);
 
   // OIDC Client Creation Form States
   const [clientName, setClientName] = useState('');
@@ -50,6 +58,56 @@ const Dashboard = ({ token, onLogout }) => {
 
   // Global Alert State
   const [alert, setAlert] = useState({ isOpen: false, title: '', message: '', type: 'info' });
+
+  // Dynamic Notifications State
+  const [notifications, setNotifications] = useState([]);
+
+  const formatNotificationTime = (dateStr) => {
+    if (!dateStr) return 'Just now';
+    const date = new Date(dateStr);
+    const seconds = Math.floor((new Date() - date) / 1000);
+    if (seconds < 60) return 'Just now';
+    const minutes = Math.floor(seconds / 60);
+    if (minutes < 60) return `${minutes}m ago`;
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `${hours}h ago`;
+    return date.toLocaleDateString();
+  };
+
+  const fetchAllNotifications = async () => {
+    const res = await getNotifications(token);
+    if (res.success && res.data) {
+      const formatted = res.data.map(n => ({
+        id: n.id,
+        text: n.text,
+        unread: n.unread,
+        time: formatNotificationTime(n.created_at),
+      }));
+      setNotifications(formatted);
+    }
+  };
+
+  const addNotification = async (text) => {
+    const res = await createNotification(token, text);
+    if (res.success) {
+      fetchAllNotifications();
+    } else {
+      setNotifications((prev) => [
+        {
+          id: Date.now(),
+          text,
+          time: 'Just now',
+          unread: true,
+        },
+        ...prev,
+      ]);
+    }
+  };
+
+  const handleMarkAllRead = async () => {
+    setNotifications(prev => prev.map(n => ({ ...n, unread: false })));
+    await markNotificationsRead(token);
+  };
 
   // Refs
   const socketRef = useRef(null);
@@ -75,6 +133,7 @@ const Dashboard = ({ token, onLogout }) => {
         setUserId(res.data.id || '');
         setRoles(res.data.roles || []);
         setMfaEnabled(res.data.mfa_enabled || false);
+        fetchAllNotifications();
       } else {
         onLogout();
       }
@@ -225,6 +284,7 @@ const Dashboard = ({ token, onLogout }) => {
     setIsLoadingProfile(false);
 
     if (res.success) {
+      addNotification('Profile Settings: Personal profile details updated successfully.');
       setAlert({
         isOpen: true,
         title: 'Success',
@@ -240,6 +300,7 @@ const Dashboard = ({ token, onLogout }) => {
     setIsSettingUpMfa(true);
     const res = await getMfaSetup(token);
     if (res.success && res.data) {
+      addNotification('MFA Security: Setup initiated. Scanning secure QR credential.');
       setMfaSetupData({
         secret: res.data.secret,
         url: res.data.url
@@ -257,7 +318,13 @@ const Dashboard = ({ token, onLogout }) => {
       setMfaEnabled(true);
       setIsSettingUpMfa(false);
       setMfaVerifyCode('');
-      setAlert({ isOpen: true, title: 'MFA Active', message: 'Two-Factor Authentication is successfully activated!', type: 'success' });
+      addNotification('MFA Security: Two-Factor Authentication successfully activated.');
+      if (res.data && res.data.backup_codes) {
+        setBackupCodes(res.data.backup_codes);
+        setAlert({ isOpen: true, title: 'MFA Active', message: 'Two-Factor Authentication is activated! Emergency backup codes are ready below.', type: 'success' });
+      } else {
+        setAlert({ isOpen: true, title: 'MFA Active', message: 'Two-Factor Authentication is successfully activated!', type: 'success' });
+      }
     } else {
       setAlert({ isOpen: true, title: 'MFA Error', message: res.message, type: 'error' });
     }
@@ -270,6 +337,7 @@ const Dashboard = ({ token, onLogout }) => {
       setMfaEnabled(false);
       setIsDisablingMfa(false);
       setMfaVerifyCode('');
+      addNotification('MFA Security: Two-Factor Authentication has been deactivated.');
       setAlert({ isOpen: true, title: 'MFA Inactive', message: 'Two-Factor Authentication has been disabled.', type: 'info' });
     } else {
       setAlert({ isOpen: true, title: 'MFA Error', message: res.message, type: 'error' });
@@ -286,6 +354,7 @@ const Dashboard = ({ token, onLogout }) => {
     });
 
     if (res.success) {
+      addNotification(`OIDC Registry: Client "${res.data.client_name}" registered successfully.`);
       setClientName('');
       setClientId('');
       setIsPkceRequired(false);
@@ -305,6 +374,7 @@ const Dashboard = ({ token, onLogout }) => {
   const handleDeleteClientClick = async (id, name) => {
     const res = await deleteClient(token, id);
     if (res.success) {
+      addNotification(`OIDC Registry: Client "${name}" successfully deleted.`);
       setAlert({ isOpen: true, title: 'Client Deleted', message: `OIDC Client "${name}" removed.`, type: 'info' });
       fetchClients();
     } else {
@@ -319,6 +389,7 @@ const Dashboard = ({ token, onLogout }) => {
     const assign = !currentRoles.includes(roleName);
     const res = await updateUserRole(token, id, roleName, assign);
     if (res.success) {
+      addNotification('Directory: User authority roles modified.');
       setAlert({ isOpen: true, title: 'Role Updated', message: 'User role modified successfully.', type: 'success' });
       fetchUsers();
     } else {
@@ -329,6 +400,7 @@ const Dashboard = ({ token, onLogout }) => {
   const handleStatusChange = async (id, newStatus) => {
     const res = await updateUserStatus(token, id, newStatus);
     if (res.success) {
+      addNotification(`Directory: User status changed to ${newStatus}.`);
       setAlert({
         isOpen: true,
         title: 'Status Updated',
@@ -344,6 +416,7 @@ const Dashboard = ({ token, onLogout }) => {
   const handleDeleteUser = async (id) => {
     const res = await deleteUser(token, id);
     if (res.success) {
+      addNotification('Directory: User profile account purged from system registry.');
       setAlert({
         isOpen: true,
         title: 'User Deleted',
@@ -371,6 +444,9 @@ const Dashboard = ({ token, onLogout }) => {
       activeTab={activeTab}
       setActiveTab={setActiveTab}
       onLogout={onLogout}
+      notifications={notifications}
+      setNotifications={setNotifications}
+      onMarkAllRead={handleMarkAllRead}
     >
       {isLoadingProfile ? (
         <div className="flex flex-col items-center justify-center py-36 animate-fade-in">
@@ -410,11 +486,17 @@ const Dashboard = ({ token, onLogout }) => {
               setProfile={setProfile}
               onSubmitProfile={handleUpdateProfileSubmit}
               isLoadingProfile={isLoadingProfile}
+              token={token}
+              currentEmail={email}
+              onEmailChanged={(newEmail) => setEmail(newEmail)}
+              setAlert={setAlert}
             />
           )}
 
           {activeTab === 'security' && (
             <SecurityMfa
+              token={token}
+              setAlert={setAlert}
               mfaEnabled={mfaEnabled}
               isSettingUpMfa={isSettingUpMfa}
               setIsSettingUpMfa={setIsSettingUpMfa}
@@ -426,6 +508,8 @@ const Dashboard = ({ token, onLogout }) => {
               onMfaInit={handleMfaInit}
               onMfaEnableSubmit={handleMfaEnableSubmit}
               onMfaDisableSubmit={handleMfaDisableSubmit}
+              backupCodes={backupCodes}
+              setBackupCodes={setBackupCodes}
             />
           )}
 

@@ -225,14 +225,24 @@ func (s *AuthService) RevokeSession(userID uuid.UUID, sessionID uuid.UUID) error
 	return nil
 }
 
-func (s *AuthService) RevokeAllOtherSessions(userID uuid.UUID, currentTokenHash string) error {
+func (s *AuthService) RevokeAllOtherSessions(userID uuid.UUID, currentSessionID *uuid.UUID) error {
 	var sessions []models.RefreshToken
-	if err := config.DB.Where("user_id = ? AND token_hash != ?", userID, currentTokenHash).Find(&sessions).Error; err == nil {
+	query := config.DB.Where("user_id = ? AND revoked = ?", userID, false)
+	if currentSessionID != nil {
+		query = query.Where("id != ?", *currentSessionID)
+	}
+
+	if err := query.Find(&sessions).Error; err == nil {
 		ctx := context.Background()
 		for _, sess := range sessions {
 			config.RedisClient.Del(ctx, "session:refresh_token:"+sess.TokenHash)
 			config.RedisClient.Set(ctx, "session:revoked:"+sess.ID.String(), "1", time.Hour)
 		}
 	}
-	return config.DB.Model(&models.RefreshToken{}).Where("user_id = ? AND token_hash != ?", userID, currentTokenHash).Update("revoked", true).Error
+
+	updateQuery := config.DB.Model(&models.RefreshToken{}).Where("user_id = ? AND revoked = ?", userID, false)
+	if currentSessionID != nil {
+		updateQuery = updateQuery.Where("id != ?", *currentSessionID)
+	}
+	return updateQuery.Update("revoked", true).Error
 }

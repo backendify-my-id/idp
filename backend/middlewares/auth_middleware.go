@@ -136,6 +136,7 @@ func AuthMiddleware(c *fiber.Ctx) error {
 	c.Locals("user_id", userID)
 	c.Locals("email", email)
 	c.Locals("roles", roleNames)
+	c.Locals("sid", sid)
 
 	return c.Next()
 }

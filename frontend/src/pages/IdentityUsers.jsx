@@ -1,4 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
+import ConfirmationModal from '../components/ConfirmationModal';
+import MobileActionSheet from '../components/MobileActionSheet';
 
 const IdentityUsers = ({
   usersList,
@@ -57,6 +59,28 @@ const IdentityUsers = ({
 
   // Verification input state for typing user email
   const [confirmInput, setConfirmInput] = useState('');
+
+  // Mobile bottom sheet state
+  const [mobileSheet, setMobileSheet] = useState({
+    isOpen: false,
+    user: null,
+  });
+
+  const openMobileSheet = useCallback((user) => {
+    setMobileSheet({ isOpen: true, user });
+  }, []);
+
+  const closeMobileSheet = useCallback(() => {
+    setMobileSheet({ isOpen: false, user: null });
+  }, []);
+
+  // Detect mobile via window width (≤768px)
+  const [isMobile, setIsMobile] = useState(() => window.innerWidth <= 768);
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth <= 768);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   const filteredUsers = usersList.filter(u => 
     u.full_name?.toLowerCase().includes(query.toLowerCase()) ||
@@ -167,7 +191,7 @@ const IdentityUsers = ({
           No directory records found matching details.
         </div>
       ) : (
-        <div className="lg:overflow-visible overflow-x-auto rounded-3xl border border-slate-200/50 dark:border-slate-800/80 bg-white/40 dark:bg-slate-950/15 backdrop-blur-md shadow-sm">
+        <div className="w-full overflow-x-auto rounded-3xl border border-slate-200/50 dark:border-slate-800/80 bg-white/40 dark:bg-slate-950/15 backdrop-blur-md shadow-sm">
           <table className="min-w-full text-left text-xs divide-y divide-slate-100 dark:divide-slate-850">
             <thead className="bg-slate-50/50 dark:bg-slate-900/50 text-slate-400 dark:text-slate-500 font-extrabold uppercase text-[9px] tracking-wider">
               <tr>
@@ -301,22 +325,28 @@ const IdentityUsers = ({
                       </div>
                     </td>
                     
-                    {/* Action controls - Single actions dropdown trigger */}
-                    <td className="px-6 py-4 text-right relative whitespace-nowrap">
-                      <button
-                        id={`btn-${user.id}`}
-                        disabled={isSelf}
-                        onClick={() => setActiveDropdownId(activeDropdownId === user.id ? null : user.id)}
-                        className="px-3 py-1.5 rounded-xl border border-slate-200/60 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-350 hover:bg-slate-50 dark:hover:bg-slate-850 active:scale-95 transition-all text-[10px] font-extrabold uppercase tracking-wider flex items-center gap-1.5 ml-auto cursor-pointer disabled:opacity-40 disabled:pointer-events-none"
-                      >
-                        Actions
-                        <svg className={`w-3 h-3 text-slate-450 transition-transform duration-200 ${activeDropdownId === user.id ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-                        </svg>
-                      </button>
+                    {/* Action controls - Mobile shows bottom sheet, desktop shows inline dropdown */}
+                     <td className="px-6 py-4 text-right relative whitespace-nowrap">
+                       <button
+                         id={`btn-${user.id}`}
+                         disabled={isSelf}
+                         onClick={() => {
+                           if (isMobile) {
+                             openMobileSheet(user);
+                           } else {
+                             setActiveDropdownId(activeDropdownId === user.id ? null : user.id);
+                           }
+                         }}
+                         className="px-3 py-1.5 rounded-xl border border-slate-200/60 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-350 hover:bg-slate-50 dark:hover:bg-slate-850 active:scale-95 transition-all text-[10px] font-extrabold uppercase tracking-wider flex items-center gap-1.5 ml-auto cursor-pointer disabled:opacity-40 disabled:pointer-events-none"
+                       >
+                         Actions
+                         <svg className={`w-3 h-3 text-slate-450 transition-transform duration-200 ${!isMobile && activeDropdownId === user.id ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                           <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                         </svg>
+                       </button>
 
                       {/* Dropdown overlay card */}
-                      {activeDropdownId === user.id && (
+                      {!isMobile && activeDropdownId === user.id && (
                          <div 
                            id={`dropdown-${user.id}`}
                            className={`absolute right-6 w-48 rounded-2xl border border-slate-250/80 dark:border-slate-800 bg-white dark:bg-[#0f172a] shadow-2xl p-1.5 z-40 animate-scale-up text-left ${
@@ -386,69 +416,63 @@ const IdentityUsers = ({
         </div>
       )}
 
-      {/* Premium Double-Check Confirmation Dialog Modal */}
-      {confirmModal.isOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          {/* Blur Backdrop */}
-          <div 
-            onClick={closeConfirmModal}
-            className="fixed inset-0 bg-slate-950/65 backdrop-blur-sm transition-opacity animate-fade-in"
-          />
-          
-          {/* Dialog Card Box */}
-          <div className="relative w-full max-w-md p-6 rounded-3xl border border-slate-200/60 dark:border-slate-800 bg-white/95 dark:bg-[#0b0f19]/95 backdrop-blur-2xl shadow-2xl animate-scale-up text-left z-55">
-            <div className="flex flex-col gap-4">
-              
-              {/* Colored Indicator Header Icon */}
-              <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${getModalColorClasses().iconBg}`}>
-                {getModalColorClasses().icon}
-              </div>
+      {/* Reusable Premium Double-Check Confirmation Dialog Modal */}
+      <ConfirmationModal
+        isOpen={confirmModal.isOpen}
+        onClose={closeConfirmModal}
+        onConfirm={executeConfirmedAction}
+        title={getModalColorClasses().title}
+        message={`You are initiating a restricted administrative change for ${confirmModal.userName}. ${
+          confirmModal.type === 'delete' 
+            ? 'This will completely delete the user profile, associated active sessions, and credentials from the database. This action is permanent and cannot be undone!' 
+            : 'Banning will prevent all future single-sign-on authentications immediately.'
+        }`}
+        type={confirmModal.type === 'delete' ? 'danger' : 'warning'}
+        confirmText="Confirm Action"
+        cancelText="Cancel"
+        validationValue={confirmModal.userEmail}
+        validationLabel="Type email to authorize:"
+        targetMetadata={{ label: 'Target', value: confirmModal.userEmail }}
+        icon={getModalColorClasses().icon}
+      />
 
-              <div>
-                <h3 className="text-sm font-black text-slate-850 dark:text-white uppercase tracking-wider">
-                  {getModalColorClasses().title}
-                </h3>
-                <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 mt-2 leading-relaxed">
-                  You are performing a high-risk administrative action on 
-                  <strong className="text-slate-800 dark:text-slate-200"> {confirmModal.userName}</strong>.
-                  {confirmModal.type === 'delete' && ' This will completely delete the user profile and credentials from the database. This action is permanent and cannot be undone!'}
-                  {confirmModal.type === 'banned' && ' Banning will prevent all future single-sign-on authentications immediately.'}
-                </p>
-
-                {/* Double-Check Input Verification */}
-                <div className="mt-4 space-y-2">
-                  <label className="text-[10px] font-black uppercase text-slate-450 dark:text-slate-500 tracking-wider block">
-                    To confirm, please type user email: <code className="bg-slate-100 dark:bg-slate-900 px-1.5 py-0.5 rounded font-mono font-bold text-slate-700 dark:text-slate-350 select-all">{confirmModal.userEmail}</code>
-                  </label>
-                  <input
-                    type="text"
-                    value={confirmInput}
-                    onChange={(e) => setConfirmInput(e.target.value)}
-                    placeholder="Type user's email to verify"
-                    className="w-full text-xs font-semibold px-3.5 py-2.5 border rounded-xl bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 focus:border-rose-500 focus:ring-rose-500 focus:outline-none transition-all"
-                  />
-                </div>
-              </div>
-
-              <div className="flex items-center justify-end gap-3 mt-2">
-                <button
-                  onClick={closeConfirmModal}
-                  className="px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-transparent text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 hover:bg-slate-100/50 dark:hover:bg-slate-850 transition-all cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  disabled={confirmInput.trim() !== confirmModal.userEmail}
-                  onClick={executeConfirmedAction}
-                  className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest text-white shadow-lg transition-all active:scale-95 cursor-pointer disabled:opacity-40 disabled:pointer-events-none ${getModalColorClasses().btnBg}`}
-                >
-                  Confirm Action
-                </button>
-              </div>
-
-            </div>
-          </div>
-        </div>
+      {/* Mobile Bottom Sheet Action Panel */}
+      {mobileSheet.user && (
+        <MobileActionSheet
+          isOpen={mobileSheet.isOpen}
+          onClose={closeMobileSheet}
+          title={mobileSheet.user.full_name || mobileSheet.user.email || 'User'}
+          subtitle={mobileSheet.user.email}
+          items={[
+            { type: 'section', label: 'Update State' },
+            {
+              label: 'Activate Account',
+              disabled: mobileSheet.user.status === 'active',
+              icon: <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>,
+              onClick: () => handleDirectAction('active', mobileSheet.user.id),
+            },
+            {
+              label: 'Suspend Account',
+              disabled: mobileSheet.user.status === 'suspended',
+              icon: <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>,
+              onClick: () => handleDirectAction('suspended', mobileSheet.user.id),
+            },
+            { type: 'divider', label: 'Danger Zone' },
+            {
+              label: 'Ban Account',
+              variant: 'danger',
+              disabled: mobileSheet.user.status === 'banned',
+              icon: <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" /></svg>,
+              onClick: () => openConfirmModal('banned', mobileSheet.user.id, mobileSheet.user.full_name || mobileSheet.user.email, mobileSheet.user.email),
+            },
+            ...(currentUserRoles.includes('admin') ? [{
+              label: 'Delete Account',
+              variant: 'danger',
+              icon: <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>,
+              onClick: () => openConfirmModal('delete', mobileSheet.user.id, mobileSheet.user.full_name || mobileSheet.user.email, mobileSheet.user.email),
+            }] : []),
+          ]}
+        />
       )}
     </div>
   );

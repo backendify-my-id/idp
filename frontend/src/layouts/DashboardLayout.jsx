@@ -1,22 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { useTheme } from '../context/ThemeContext';
+import SidebarToggleButton from '../components/SidebarToggleButton';
 
-const DashboardLayout = ({ children, user, activeTab, setActiveTab, onLogout }) => {
+const DashboardLayout = ({ children, user, activeTab, setActiveTab, onLogout, notifications = [], setNotifications, onMarkAllRead }) => {
   const { theme, toggleTheme } = useTheme();
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
+  const [isUserDropdownOpen, setIsUserDropdownOpen] = useState(false);
   const [latency, setLatency] = useState(12);
 
   // Mock search query
   const [searchQuery, setSearchQuery] = useState('');
-
-  // Notifications mock data
-  const [notifications, setNotifications] = useState([
-    { id: 1, text: 'Two-Factor Authentication configuration verified.', time: '2 mins ago', unread: true },
-    { id: 2, text: 'Client Registry: New secret created for OIDC Client.', time: '1 hr ago', unread: true },
-    { id: 3, text: 'Identity Promoted: User state verified by IdP Directory.', time: '2 hrs ago', unread: false },
-  ]);
 
   // Periodic latency simulation
   useEffect(() => {
@@ -38,7 +33,11 @@ const DashboardLayout = ({ children, user, activeTab, setActiveTab, onLogout }) 
   const hasRole = (role) => user?.roles?.includes(role) || false;
 
   const markAllRead = () => {
-    setNotifications(prev => prev.map(n => ({ ...n, unread: false })));
+    if (onMarkAllRead) {
+      onMarkAllRead();
+    } else {
+      setNotifications(prev => prev.map(n => ({ ...n, unread: false })));
+    }
   };
 
   const unreadCount = notifications.filter(n => n.unread).length;
@@ -140,40 +139,7 @@ const DashboardLayout = ({ children, user, activeTab, setActiveTab, onLogout }) 
             </div>
           </div>
 
-          {/* User Card inside Sidebar */}
-          <div className={`rounded-2xl bg-slate-50 dark:bg-slate-900/60 border border-slate-100 dark:border-slate-800/40 flex flex-col gap-3 transition-all duration-300 ${
-            collapsed ? 'p-2 items-center' : 'p-4'
-          }`}>
-            <div className={`flex items-center gap-3 transition-all duration-300 ${collapsed ? 'justify-center' : ''}`}>
-              {user?.avatar_url ? (
-                <img
-                  src={user.avatar_url}
-                  alt="Avatar"
-                  className="w-10 h-10 rounded-xl border-2 border-indigo-500/40 shadow object-cover shrink-0"
-                  onError={(e) => {
-                    e.target.onerror = null;
-                    e.target.src = '';
-                  }}
-                />
-              ) : (
-                <div className="w-10 h-10 shrink-0 rounded-xl bg-gradient-to-tr from-indigo-500 to-purple-600 flex items-center justify-center shadow text-white text-xs font-black">
-                  {getInitials()}
-                </div>
-              )}
-              <div className={`min-w-0 text-left transition-all duration-300 origin-left overflow-hidden ${
-                collapsed ? 'max-w-0 opacity-0 scale-90 pointer-events-none' : 'max-w-48 opacity-100 scale-100'
-              }`}>
-                <h4 className="text-xs font-bold text-slate-800 dark:text-slate-100 truncate whitespace-nowrap">{user?.full_name || 'Identity User'}</h4>
-                <p className="text-[9px] text-slate-500 dark:text-slate-400 truncate mt-0.5 whitespace-nowrap">{user?.email}</p>
-              </div>
-            </div>
 
-            <div className={`w-full py-1 text-center border bg-gradient-to-r text-[8.5px] font-extrabold uppercase rounded-lg tracking-widest bg-opacity-5 dark:bg-opacity-10 transition-all duration-300 origin-left overflow-hidden ${
-              collapsed ? 'max-w-0 py-0 border-transparent opacity-0 scale-90 pointer-events-none' : 'max-w-full opacity-100 scale-100'
-            } ${getRoleColor()}`}>
-              <span className="whitespace-nowrap">{getRoleLabel()}</span>
-            </div>
-          </div>
 
           {/* Navigation List */}
           <nav className="space-y-1">
@@ -233,7 +199,7 @@ const DashboardLayout = ({ children, user, activeTab, setActiveTab, onLogout }) 
   };
 
   return (
-    <div className={`h-screen w-screen overflow-hidden font-sans transition-colors duration-300 flex flex-col ${
+    <div className={`h-[100dvh] w-full max-w-full overflow-hidden font-sans transition-colors duration-300 flex flex-col ${
       theme === 'dark' ? 'dark bg-[#06080f] text-slate-100' : 'bg-[#f4f7fc] text-slate-900'
     }`}>
       {/* Dynamic Glowing Meshes */}
@@ -244,31 +210,21 @@ const DashboardLayout = ({ children, user, activeTab, setActiveTab, onLogout }) 
       <div className="flex w-full h-full overflow-hidden relative">
         
         {/* Desktop Sidebar (Left Panel) with collapsible widths - overflow set to visible to avoid button clipping */}
-        <aside className={`hidden lg:flex flex-col shrink-0 border-r border-slate-200/40 dark:border-slate-800/40 bg-white/70 dark:bg-[#0b0f19]/70 backdrop-blur-xl h-screen sticky top-0 transition-all duration-300 ease-in-out relative z-30 ${
+        <aside className={`hidden lg:flex flex-col shrink-0 border-r border-slate-200/40 dark:border-slate-800/40 bg-white/70 dark:bg-[#0b0f19]/70 backdrop-blur-xl h-full sticky top-0 transition-all duration-300 ease-in-out relative z-30 ${
           isSidebarCollapsed ? 'w-20 px-3 py-8' : 'w-72 px-6 py-8'
         }`}>
           {/* Collapse/Expand Floating border trigger button */}
-          <button
-            onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
-            className="hidden lg:flex absolute top-6 -right-3 w-6 h-6 rounded-full border border-slate-200 dark:border-slate-850 bg-white dark:bg-[#06080f] shadow-md items-center justify-center text-slate-550 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-all hover:scale-110 active:scale-95 cursor-pointer z-50"
-            title={isSidebarCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
-          >
-            <svg 
-              className={`w-3.5 h-3.5 transition-transform duration-350 ${isSidebarCollapsed ? 'rotate-180' : ''}`} 
-              fill="none" 
-              stroke="currentColor" 
-              strokeWidth="2.5" 
-              viewBox="0 0 24 24"
-            >
-              <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-            </svg>
-          </button>
+          <SidebarToggleButton
+            isCollapsed={isSidebarCollapsed}
+            onToggle={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+            className="hidden lg:flex absolute top-6 -right-3 w-6 h-6"
+          />
 
           {renderSidebarContent(false)}
         </aside>
 
         {/* Content Shell (Right Panel) */}
-        <div className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden relative">
+        <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden relative">
           
           {/* Top Sticky Header Bar */}
           <header className="h-20 w-full shrink-0 border-b border-slate-200/35 dark:border-slate-800/35 bg-white/40 dark:bg-[#06080f]/40 backdrop-blur-md px-6 sm:px-8 flex items-center justify-between sticky top-0 z-40 transition-colors">
@@ -285,26 +241,7 @@ const DashboardLayout = ({ children, user, activeTab, setActiveTab, onLogout }) 
                 </svg>
               </button>
 
-              {/* Desktop Collapsible Toggle Button */}
-              <button
-                onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
-                className="hidden lg:flex p-2 rounded-xl border border-slate-200/60 dark:border-slate-800/60 bg-slate-50/40 dark:bg-slate-900/30 text-slate-550 dark:text-slate-400 hover:text-indigo-650 dark:hover:text-indigo-400 cursor-pointer active:scale-95 transition-all hover:bg-slate-100/50 dark:hover:bg-slate-800/50 shadow-sm"
-                title={isSidebarCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
-              >
-                <svg 
-                  className="w-4.5 h-4.5 transition-transform duration-300"
-                  fill="none" 
-                  stroke="currentColor" 
-                  strokeWidth="2.2" 
-                  viewBox="0 0 24 24"
-                >
-                  {isSidebarCollapsed ? (
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M13 5l7 7-7 7M5 5l7 7-7 7" />
-                  ) : (
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M11 19l-7-7 7-7M19 19l-7-7 7-7" />
-                  )}
-                </svg>
-              </button>
+
               
               <div className="hidden sm:flex flex-col text-left">
                 <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Workspace / Overview</span>
@@ -400,9 +337,90 @@ const DashboardLayout = ({ children, user, activeTab, setActiveTab, onLogout }) 
                 )}
               </div>
 
-              {/* Quick Profile Compact Badge */}
-              <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-indigo-500 to-purple-600 flex items-center justify-center text-white text-[10px] font-black shadow-md">
-                {getInitials()}
+              {/* User Dropdown Menu */}
+              <div className="relative">
+                <button
+                  onClick={() => setIsUserDropdownOpen(!isUserDropdownOpen)}
+                  className="flex items-center gap-2.5 p-1.5 pr-3 rounded-xl border border-slate-200/60 dark:border-slate-800/60 hover:bg-slate-50 dark:hover:bg-slate-900/60 transition-all cursor-pointer select-none text-left"
+                >
+                  {user?.avatar_url ? (
+                    <img
+                      src={user.avatar_url}
+                      alt="Avatar"
+                      className="w-8 h-8 rounded-lg border border-indigo-500/20 shadow-sm object-cover shrink-0"
+                      onError={(e) => {
+                        e.target.onerror = null;
+                        e.target.src = '';
+                      }}
+                    />
+                  ) : (
+                    <div className="w-8 h-8 shrink-0 rounded-lg bg-gradient-to-tr from-indigo-500 to-purple-600 flex items-center justify-center shadow-md text-white text-[10px] font-black">
+                      {getInitials()}
+                    </div>
+                  )}
+                  <div className="hidden sm:flex flex-col">
+                    <span className="text-xs font-bold text-slate-800 dark:text-slate-200 leading-tight truncate max-w-[120px]">
+                      {user?.full_name || 'Identity User'}
+                    </span>
+                    <span className="text-[8px] font-black text-indigo-500 uppercase tracking-widest leading-none mt-0.5">
+                      {getRoleLabel()}
+                    </span>
+                  </div>
+                  <svg className="w-3.5 h-3.5 text-slate-400 shrink-0 ml-1" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+
+                {isUserDropdownOpen && (
+                  <>
+                    <div className="fixed inset-0 z-30" onClick={() => setIsUserDropdownOpen(false)} />
+                    <div className="absolute right-0 mt-3 w-56 rounded-2xl border border-slate-200 dark:border-slate-800/80 bg-white dark:bg-[#0f172a] shadow-2xl p-2.5 z-40 animate-scale-up text-left">
+                      <div className="px-3.5 py-2.5 border-b border-slate-100 dark:border-slate-800/60 mb-1.5">
+                        <p className="text-xs font-extrabold text-slate-800 dark:text-slate-100 truncate">{user?.full_name || 'Identity User'}</p>
+                        <p className="text-[9.5px] text-slate-400 truncate mt-0.5">{user?.email}</p>
+                      </div>
+                      <div className="space-y-0.5">
+                        <button
+                          onClick={() => {
+                            setActiveTab('profile');
+                            setIsUserDropdownOpen(false);
+                          }}
+                          className="w-full flex items-center gap-2.5 px-3.5 py-2 rounded-xl text-xs font-bold text-slate-650 dark:text-slate-350 hover:text-slate-800 dark:hover:text-slate-100 hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors cursor-pointer text-left"
+                        >
+                          <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                          </svg>
+                          Profile Settings
+                        </button>
+                        <button
+                          onClick={() => {
+                            setActiveTab('security');
+                            setIsUserDropdownOpen(false);
+                          }}
+                          className="w-full flex items-center gap-2.5 px-3.5 py-2 rounded-xl text-xs font-bold text-slate-650 dark:text-slate-350 hover:text-slate-800 dark:hover:text-slate-100 hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors cursor-pointer text-left"
+                        >
+                          <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                          </svg>
+                          Security / MFA
+                        </button>
+                        <div className="h-px bg-slate-100 dark:bg-slate-800/60 my-1" />
+                        <button
+                          onClick={() => {
+                            setIsUserDropdownOpen(false);
+                            onLogout();
+                          }}
+                          className="w-full flex items-center gap-2.5 px-3.5 py-2 rounded-xl text-xs font-bold text-rose-600 hover:bg-rose-50/50 dark:hover:bg-rose-950/20 transition-colors cursor-pointer text-left"
+                        >
+                          <svg className="w-4 h-4 text-rose-500" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                          </svg>
+                          Sign Out
+                        </button>
+                      </div>
+                    </div>
+                  </>
+                )}
               </div>
 
             </div>
@@ -410,7 +428,7 @@ const DashboardLayout = ({ children, user, activeTab, setActiveTab, onLogout }) 
           </header>
 
           {/* Core Dynamic Content Frame */}
-          <main className="p-4 sm:p-6 lg:p-8 h-[calc(100vh-80px)] overflow-y-auto scrollbar-thin w-full max-w-7xl mx-auto space-y-6">
+          <main className="p-4 sm:p-6 lg:p-8 h-[calc(100dvh-80px)] overflow-y-auto overflow-x-hidden scrollbar-thin w-full max-w-7xl mx-auto space-y-6">
             {children}
           </main>
 

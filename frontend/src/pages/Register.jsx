@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { registerUser, verifyEmail, resendOtp } from '../services/api';
 import AlertModal from '../components/AlertModal';
 import AuthLayouts from '../layouts/AuthLayouts';
+import AuthBrandPanel from '../components/AuthBrandPanel';
 
 const Register = ({ onRegisterSuccess, onNavigateToLogin }) => {
   const [email, setEmail] = useState('');
@@ -104,42 +105,10 @@ const Register = ({ onRegisterSuccess, onNavigateToLogin }) => {
   return (
     <AuthLayouts>
       <div className="w-full min-h-screen flex lg:grid lg:grid-cols-2 items-stretch relative">
-        {/* Left Side: Brand Panel */}
-        <div className="hidden lg:flex flex-col justify-between relative overflow-hidden w-full h-full min-h-screen bg-gradient-to-br from-indigo-600 via-indigo-700 to-purple-800 px-12 py-14 select-none">
-          <div className="absolute top-[-80px] left-[-80px] w-[420px] h-[420px] rounded-full bg-indigo-400/20 blur-3xl pointer-events-none" />
-          <div className="absolute bottom-[-100px] right-[-60px] w-[360px] h-[360px] rounded-full bg-purple-500/25 blur-3xl pointer-events-none" />
-          
-          <div className="relative z-10 flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-white/15 backdrop-blur border border-white/20 flex items-center justify-center shadow-lg">
-              <span className="text-white font-black text-base tracking-wider">B</span>
-            </div>
-            <span className="text-white font-black text-lg tracking-tight">Backendify IdP</span>
-          </div>
-
-          <div className="relative z-10 flex flex-col gap-8">
-            <div className="flex flex-col gap-5">
-              <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/10 border border-white/15 backdrop-blur-sm self-start">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                <span className="text-white/80 text-[10px] font-extrabold uppercase tracking-widest">Identity Provider</span>
-              </div>
-              <div>
-                <h2 className="text-4xl xl:text-5xl font-black text-white leading-tight tracking-tight">
-                  Start your<br />
-                  <span className="text-indigo-200">identity registry.</span>
-                </h2>
-                <p className="text-indigo-200/70 text-sm font-semibold mt-4 leading-relaxed max-w-xs">
-                  Create a secure, centralized identity account and manage OIDC client configurations instantly.
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <div className="relative z-10">
-            <p className="text-white/30 text-[10px] font-semibold">
-              © 2026 Backendify — Built with React & Vite
-            </p>
-          </div>
-        </div>
+        <AuthBrandPanel
+          headline={`Start your\nidentity registry.`}
+          description="Create a secure, centralized identity account and manage OIDC client configurations instantly."
+        />
 
         {/* Right Side: Form Panel */}
         <div className="flex flex-col items-center justify-center w-full min-h-screen px-6 py-12 sm:px-10 lg:px-12 xl:px-20 relative overflow-hidden bg-slate-50 dark:bg-[#090d16] transition-colors">

@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-export const BASE_URL = 'http://localhost:8800/api';
+export const BASE_URL = `http://${window.location.hostname}:8800/api`;
 
 // Create Axios Instance
 const apiClient = axios.create({
@@ -78,6 +78,21 @@ export const getProfile = (token) =>
 export const updateProfile = (token, profileData) =>
   apiClient.put('/profile', profileData, authConfig(token));
 
+export const initiateEmailChange = (token, newEmail) =>
+  apiClient.post('/profile/email-change', { new_email: newEmail }, authConfig(token));
+
+export const confirmEmailChange = (token, confirmationToken) =>
+  apiClient.post('/profile/email-change/confirm', { token: confirmationToken }, authConfig(token));
+
+export const getSessions = (token) =>
+  apiClient.get('/profile/sessions', authConfig(token));
+
+export const revokeSession = (token, sessionId) =>
+  apiClient.delete(`/profile/sessions/${sessionId}`, authConfig(token));
+
+export const revokeAllOtherSessions = (token) =>
+  apiClient.delete('/profile/sessions', authConfig(token));
+
 export const getMfaSetup = (token) =>
   apiClient.get('/mfa/setup', authConfig(token));
 
@@ -110,3 +125,13 @@ export const updateUserStatus = (token, id, status) =>
 
 export const deleteUser = (token, id) =>
   apiClient.delete(`/admin/users/${id}`, authConfig(token));
+
+// ─── Notification Endpoints ────────────────────────────────────────────────────
+export const getNotifications = (token) =>
+  apiClient.get('/notifications', authConfig(token));
+
+export const createNotification = (token, text) =>
+  apiClient.post('/notifications', { text }, authConfig(token));
+
+export const markNotificationsRead = (token) =>
+  apiClient.put('/notifications/read', {}, authConfig(token));

@@ -219,7 +219,10 @@ func (s *AuthService) VerifyBackupCode(userID uuid.UUID, rawCode string) (bool, 
 				tx.Rollback()
 				return false, errUpdate
 			}
-			return true, tx.Commit().Error
+			if errCommit := tx.Commit().Error; errCommit != nil {
+				return false, errCommit
+			}
+			return true, nil
 		}
 	}
 

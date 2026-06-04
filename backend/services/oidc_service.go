@@ -105,9 +105,13 @@ func verifyPKCE(verifier, challenge, method string) bool {
 	return false
 }
 
-func (s *AuthService) GetClients() ([]ClientDTO, error) {
+func (s *AuthService) GetClients(ownerIDStr string) ([]ClientDTO, error) {
 	var clients []models.Client
-	if err := config.DB.Order("created_at desc").Find(&clients).Error; err != nil {
+	query := config.DB.Order("created_at desc")
+	if ownerIDStr != "" {
+		query = query.Where("user_id = ?", ownerIDStr)
+	}
+	if err := query.Find(&clients).Error; err != nil {
 		return nil, err
 	}
 
@@ -121,12 +125,19 @@ func (s *AuthService) GetClients() ([]ClientDTO, error) {
 			urls = append(urls, ru.Url)
 		}
 
+		var userIDStr *string
+		if c.UserID != nil {
+			str := c.UserID.String()
+			userIDStr = &str
+		}
+
 		dtos = append(dtos, ClientDTO{
 			ID:             c.ID.String(),
 			AppClientID:    c.AppClientID,
 			ClientName:     c.ClientName,
 			IsPkceRequired: c.IsPkceRequired,
 			RedirectURLs:   urls,
+			UserID:         userIDStr,
 			CreatedAt:      c.CreatedAt.Format("2006-01-02 15:04:05"),
 		})
 	}
@@ -134,7 +145,7 @@ func (s *AuthService) GetClients() ([]ClientDTO, error) {
 	return dtos, nil
 }
 
-func (s *AuthService) CreateClient(name string, appClientID string, isPkceRequired bool, redirectURLs []string) (*models.Client, string, error) {
+func (s *AuthService) CreateClient(name string, appClientID string, isPkceRequired bool, redirectURLs []string, ownerID *uuid.UUID) (*models.Client, string, error) {
 	var count int64
 	config.DB.Model(&models.Client{}).Where("client_id = ?", appClientID).Count(&count)
 	if count > 0 {
@@ -157,6 +168,7 @@ func (s *AuthService) CreateClient(name string, appClientID string, isPkceRequir
 		AppClientID:      appClientID,
 		ClientSecretHash: string(hashedSecret),
 		IsPkceRequired:   isPkceRequired,
+		UserID:           ownerID,
 	}
 
 	if err := config.DB.Create(&client).Error; err != nil {
@@ -212,4 +224,67 @@ func (s *AuthService) DeleteClient(clientIDStr string) error {
 	}
 
 	return tx.Commit().Error
+}
+
+func (s *AuthService) UpdateClient(clientIDStr string, name string, isPkceRequired bool, redirectURLs []string) error {
+	id, err := uuid.Parse(clientIDStr)
+	if err != nil {
+		return errors.New("invalid client ID")
+	}
+
+	tx := config.DB.Begin()
+	if tx.Error != nil {
+		return tx.Error
+	}
+
+	var client models.Client
+	if err := tx.Where("id = ?", id).First(&client).Error; err != nil {
+		tx.Rollback()
+		return errors.New("client not found")
+	}
+
+	client.ClientName = name
+	client.IsPkceRequired = isPkceRequired
+
+	if err := tx.Save(&client).Error; err != nil {
+		tx.Rollback()
+		return err
+	}
+
+	// Remove old redirect URLs and save new ones
+	if err := tx.Where("client_id = ?", id).Delete(&models.ClientRedirectUrl{}).Error; err != nil {
+		tx.Rollback()
+		return err
+	}
+
+	for _, url := range redirectURLs {
+		if url == "" {
+			continue
+		}
+		redirectUrl := models.ClientRedirectUrl{
+			ClientID: id,
+			Url:      url,
+		}
+		if err := tx.Create(&redirectUrl).Error; err != nil {
+			tx.Rollback()
+			return err
+		}
+	}
+
+	return tx.Commit().Error
+}
+
+func (s *AuthService) IsClientOwner(clientIDStr string, userIDStr string) (bool, error) {
+	id, err := uuid.Parse(clientIDStr)
+	if err != nil {
+		return false, err
+	}
+	var client models.Client
+	if err := config.DB.Where("id = ?", id).First(&client).Error; err != nil {
+		return false, err
+	}
+	if client.UserID == nil {
+		return false, nil
+	}
+	return client.UserID.String() == userIDStr, nil
 }

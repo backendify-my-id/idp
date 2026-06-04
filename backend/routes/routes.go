@@ -85,9 +85,16 @@ func SetupRoutes(app *fiber.App) {
 	protected.Delete("/api/profile/sessions/:id", authController.RevokeSession)
 	protected.Delete("/api/profile/sessions", authController.RevokeAllOtherSessions)
 
-	// Double-Verification Email Change Flow
-	protected.Post("/api/profile/email-change", authController.InitiateEmailChange)
-	protected.Post("/api/profile/email-change/confirm", authController.ConfirmEmailChange)
+	// High-Security 3-Step Email Change Flow
+	protected.Post("/api/profile/email-change/step1-initiate", authController.InitiateEmailChangeStep1)
+	protected.Post("/api/profile/email-change/step1-verify", authController.VerifyEmailChangeStep1)
+	protected.Post("/api/profile/email-change/step2-check", authController.CheckNewEmailStep2)
+	protected.Post("/api/profile/email-change/step3-confirm", authController.ConfirmEmailChangeStep3)
+
+	// High-Security 3-Step Change Password Flow
+	protected.Post("/api/profile/change-password/step1-verify", authController.ChangePasswordStep1)
+	protected.Post("/api/profile/change-password/step2-mfa", authController.ChangePasswordStep2Mfa)
+	protected.Post("/api/profile/change-password/step3-update", authController.ChangePasswordStep3Update)
 
 	// Notifications API
 	protected.Get("/api/notifications", authController.GetNotifications)
@@ -98,15 +105,17 @@ func SetupRoutes(app *fiber.App) {
 	admin := app.Group("/api/admin")
 	admin.Use(middlewares.AuthMiddleware)
 	
-	// Client application registry management (strictly admin)
-	admin.Get("/clients", middlewares.RequireRole("admin"), authController.GetClients)
-	admin.Post("/clients", middlewares.RequireRole("admin"), authController.CreateClient)
-	admin.Delete("/clients/:id", middlewares.RequireRole("admin"), authController.DeleteClient)
+	// Client application registry management (admin & developer)
+	admin.Get("/clients", middlewares.RequireRole("admin", "developer"), authController.GetClients)
+	admin.Post("/clients", middlewares.RequireRole("admin", "developer"), authController.CreateClient)
+	admin.Put("/clients/:id", middlewares.RequireRole("admin", "developer"), authController.UpdateClient)
+	admin.Delete("/clients/:id", middlewares.RequireRole("admin", "developer"), authController.DeleteClient)
 	
 	admin.Get("/users", middlewares.RequireRole("admin", "idp_support"), authController.GetUsers)
 	admin.Put("/users/:id/role", middlewares.RequireRole("admin"), authController.UpdateUserRole) // strictly admin
 	admin.Put("/users/:id/status", middlewares.RequireRole("admin", "idp_support"), authController.UpdateUserStatus) // support can ban/unban/suspend
 	admin.Put("/users/:id/unlock", middlewares.RequireRole("admin", "idp_support"), authController.UnlockUser)
 	admin.Delete("/users/:id", middlewares.RequireRole("admin"), authController.DeleteUser) // strictly admin delete
+	admin.Get("/audit-logs", middlewares.RequireRole("admin"), authController.GetAuditLogs)
 }
 

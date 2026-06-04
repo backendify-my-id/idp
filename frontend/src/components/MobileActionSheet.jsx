@@ -120,7 +120,9 @@ const MobileActionSheet = ({ isOpen, onClose, title, subtitle, items = [] }) => 
                 onClick={() => {
                   if (!item.disabled) {
                     item.onClick?.();
-                    onClose();
+                    if (!item.preventClose) {
+                      onClose();
+                    }
                   }
                 }}
                 className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-2xl text-sm font-bold transition-all active:scale-[0.98] text-left ${

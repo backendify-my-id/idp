@@ -2,7 +2,6 @@ package controllers
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"time"
 
@@ -29,12 +28,32 @@ type ResetPasswordRequest struct {
 	NewPassword string `json:"new_password"`
 }
 
-type EmailChangeRequest struct {
-	NewEmail string `json:"new_email"`
+type EmailChangeStep1VerifyRequest struct {
+	OTP string `json:"otp"`
 }
 
-type ConfirmEmailChangeRequest struct {
-	Token string `json:"token"`
+type EmailChangeStep2CheckRequest struct {
+	TempToken string `json:"temp_token"`
+	NewEmail  string `json:"new_email"`
+}
+
+type EmailChangeStep3ConfirmRequest struct {
+	TempToken string `json:"temp_token"`
+	OTP       string `json:"otp"`
+}
+
+type ChangePasswordStep1Request struct {
+	OldPassword string `json:"old_password"`
+}
+
+type ChangePasswordStep2Request struct {
+	TempToken string `json:"temp_token"`
+	Code      string `json:"code"`
+}
+
+type ChangePasswordStep3Request struct {
+	TempToken   string `json:"temp_token"`
+	NewPassword string `json:"new_password"`
 }
 
 func (c *AuthController) GetProfile(ctx *fiber.Ctx) error {
@@ -148,53 +167,189 @@ func (c *AuthController) ResetPassword(ctx *fiber.Ctx) error {
 	return utils.SendSuccess(ctx, fiber.StatusOK, "Password has been reset successfully. You can now sign in with your new password.", nil)
 }
 
-func (c *AuthController) InitiateEmailChange(ctx *fiber.Ctx) error {
+func (c *AuthController) InitiateEmailChangeStep1(ctx *fiber.Ctx) error {
 	userIDStr := getLocalString(ctx, "user_id")
-	email := getLocalString(ctx, "email")
 	if userIDStr == "" {
 		return utils.SendError(ctx, fiber.StatusUnauthorized, "Unauthorized")
 	}
 
-	var req EmailChangeRequest
+	otp, err := c.authService.InitiateEmailChangeStep1(userIDStr)
+	if err != nil {
+		return utils.SendError(ctx, fiber.StatusInternalServerError, err.Error())
+	}
+
+	auditLog(ctx, "INITIATE_EMAIL_CHANGE_STEP1", "", userIDStr, "")
+
+	return utils.SendSuccess(ctx, fiber.StatusOK, "Verification OTP sent to your current email.", fiber.Map{
+		"otp": otp,
+	})
+}
+
+func (c *AuthController) VerifyEmailChangeStep1(ctx *fiber.Ctx) error {
+	userIDStr := getLocalString(ctx, "user_id")
+	if userIDStr == "" {
+		return utils.SendError(ctx, fiber.StatusUnauthorized, "Unauthorized")
+	}
+
+	var req EmailChangeStep1VerifyRequest
 	if err := ctx.BodyParser(&req); err != nil {
 		return utils.SendError(ctx, fiber.StatusBadRequest, "Invalid request payload")
+	}
+
+	if req.OTP == "" {
+		return utils.SendError(ctx, fiber.StatusBadRequest, "OTP is required")
+	}
+
+	tempToken, err := c.authService.VerifyEmailChangeStep1(userIDStr, req.OTP)
+	if err != nil {
+		return utils.SendError(ctx, fiber.StatusBadRequest, err.Error())
+	}
+
+	auditLog(ctx, "VERIFY_EMAIL_CHANGE_STEP1_SUCCESS", "", userIDStr, "")
+
+	return utils.SendSuccess(ctx, fiber.StatusOK, "Current email verified successfully.", fiber.Map{
+		"temp_token": tempToken,
+	})
+}
+
+func (c *AuthController) CheckNewEmailStep2(ctx *fiber.Ctx) error {
+	userIDStr := getLocalString(ctx, "user_id")
+	if userIDStr == "" {
+		return utils.SendError(ctx, fiber.StatusUnauthorized, "Unauthorized")
+	}
+
+	var req EmailChangeStep2CheckRequest
+	if err := ctx.BodyParser(&req); err != nil {
+		return utils.SendError(ctx, fiber.StatusBadRequest, "Invalid request payload")
+	}
+
+	if req.TempToken == "" {
+		return utils.SendError(ctx, fiber.StatusBadRequest, "Temporary verification token is required")
 	}
 
 	if !utils.IsValidEmail(req.NewEmail) {
 		return utils.SendError(ctx, fiber.StatusBadRequest, "Invalid email format")
 	}
 
-	token, err := c.authService.InitiateEmailChange(userIDStr, email, req.NewEmail)
+	otp, err := c.authService.CheckNewEmailStep2(userIDStr, req.TempToken, req.NewEmail)
 	if err != nil {
-		return utils.SendError(ctx, fiber.StatusInternalServerError, err.Error())
+		return utils.SendError(ctx, fiber.StatusBadRequest, err.Error())
 	}
 
-	auditLog(ctx, "INITIATE_EMAIL_CHANGE", req.NewEmail, userIDStr, fmt.Sprintf("CurrentEmail: %s", email))
+	auditLog(ctx, "CHECK_NEW_EMAIL_STEP2_SUCCESS", req.NewEmail, userIDStr, "")
 
-	return utils.SendSuccess(ctx, fiber.StatusOK, "Verification token sent to your new email. Please verify to complete the change.", fiber.Map{
-		"token": token,
+	return utils.SendSuccess(ctx, fiber.StatusOK, "New email is available. Verification OTP sent to new email.", fiber.Map{
+		"otp": otp,
 	})
 }
 
-func (c *AuthController) ConfirmEmailChange(ctx *fiber.Ctx) error {
+func (c *AuthController) ConfirmEmailChangeStep3(ctx *fiber.Ctx) error {
 	userIDStr := getLocalString(ctx, "user_id")
 	if userIDStr == "" {
 		return utils.SendError(ctx, fiber.StatusUnauthorized, "Unauthorized")
 	}
 
-	var req ConfirmEmailChangeRequest
+	var req EmailChangeStep3ConfirmRequest
 	if err := ctx.BodyParser(&req); err != nil {
 		return utils.SendError(ctx, fiber.StatusBadRequest, "Invalid request payload")
 	}
 
-	if req.Token == "" {
-		return utils.SendError(ctx, fiber.StatusBadRequest, "Verification token is required")
+	if req.TempToken == "" {
+		return utils.SendError(ctx, fiber.StatusBadRequest, "Temporary verification token is required")
 	}
 
-	if err := c.authService.ConfirmEmailChange(userIDStr, req.Token); err != nil {
+	if req.OTP == "" {
+		return utils.SendError(ctx, fiber.StatusBadRequest, "OTP is required")
+	}
+
+	if err := c.authService.ConfirmEmailChangeStep3(userIDStr, req.TempToken, req.OTP); err != nil {
 		return utils.SendError(ctx, fiber.StatusBadRequest, err.Error())
 	}
 
-	auditLog(ctx, "CONFIRM_EMAIL_CHANGE_SUCCESS", "", userIDStr, "")
-	return utils.SendSuccess(ctx, fiber.StatusOK, "Email updated successfully. Please use your new email next time you sign in.", nil)
+	auditLog(ctx, "CONFIRM_EMAIL_CHANGE_STEP3_SUCCESS", "", userIDStr, "")
+
+	return utils.SendSuccess(ctx, fiber.StatusOK, "Email updated successfully.", nil)
+}
+
+func (c *AuthController) ChangePasswordStep1(ctx *fiber.Ctx) error {
+	userIDStr := getLocalString(ctx, "user_id")
+	if userIDStr == "" {
+		return utils.SendError(ctx, fiber.StatusUnauthorized, "Unauthorized")
+	}
+
+	var req ChangePasswordStep1Request
+	if err := ctx.BodyParser(&req); err != nil {
+		return utils.SendError(ctx, fiber.StatusBadRequest, "Invalid request payload")
+	}
+
+	if req.OldPassword == "" {
+		return utils.SendError(ctx, fiber.StatusBadRequest, "Old password is required")
+	}
+
+	mfaRequired, tempToken, err := c.authService.ChangePasswordStep1Verify(userIDStr, req.OldPassword)
+	if err != nil {
+		auditLog(ctx, "CHANGE_PASSWORD_STEP1_FAILED", "", userIDStr, err.Error())
+		return utils.SendError(ctx, fiber.StatusBadRequest, err.Error())
+	}
+
+	auditLog(ctx, "CHANGE_PASSWORD_STEP1_SUCCESS", "", userIDStr, "")
+
+	return utils.SendSuccess(ctx, fiber.StatusOK, "Verification succeeded.", fiber.Map{
+		"mfa_required": mfaRequired,
+		"temp_token":   tempToken,
+	})
+}
+
+func (c *AuthController) ChangePasswordStep2Mfa(ctx *fiber.Ctx) error {
+	userIDStr := getLocalString(ctx, "user_id")
+	if userIDStr == "" {
+		return utils.SendError(ctx, fiber.StatusUnauthorized, "Unauthorized")
+	}
+
+	var req ChangePasswordStep2Request
+	if err := ctx.BodyParser(&req); err != nil {
+		return utils.SendError(ctx, fiber.StatusBadRequest, "Invalid request payload")
+	}
+
+	if req.TempToken == "" || req.Code == "" {
+		return utils.SendError(ctx, fiber.StatusBadRequest, "Both temp_token and MFA code are required")
+	}
+
+	err := c.authService.ChangePasswordStep2VerifyMFA(userIDStr, req.TempToken, req.Code)
+	if err != nil {
+		auditLog(ctx, "CHANGE_PASSWORD_STEP2_FAILED", "", userIDStr, err.Error())
+		return utils.SendError(ctx, fiber.StatusBadRequest, err.Error())
+	}
+
+	auditLog(ctx, "CHANGE_PASSWORD_STEP2_SUCCESS", "", userIDStr, "")
+
+	return utils.SendSuccess(ctx, fiber.StatusOK, "MFA code verified.", fiber.Map{
+		"temp_token": req.TempToken,
+	})
+}
+
+func (c *AuthController) ChangePasswordStep3Update(ctx *fiber.Ctx) error {
+	userIDStr := getLocalString(ctx, "user_id")
+	if userIDStr == "" {
+		return utils.SendError(ctx, fiber.StatusUnauthorized, "Unauthorized")
+	}
+
+	var req ChangePasswordStep3Request
+	if err := ctx.BodyParser(&req); err != nil {
+		return utils.SendError(ctx, fiber.StatusBadRequest, "Invalid request payload")
+	}
+
+	if req.TempToken == "" || req.NewPassword == "" {
+		return utils.SendError(ctx, fiber.StatusBadRequest, "Both temp_token and new_password are required")
+	}
+
+	err := c.authService.ChangePasswordStep3Update(userIDStr, req.TempToken, req.NewPassword)
+	if err != nil {
+		auditLog(ctx, "CHANGE_PASSWORD_STEP3_FAILED", "", userIDStr, err.Error())
+		return utils.SendError(ctx, fiber.StatusBadRequest, err.Error())
+	}
+
+	auditLog(ctx, "CHANGE_PASSWORD_STEP3_SUCCESS", "", userIDStr, "")
+
+	return utils.SendSuccess(ctx, fiber.StatusOK, "Password changed successfully. You have been logged out of all devices.", nil)
 }

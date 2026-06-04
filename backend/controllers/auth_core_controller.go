@@ -14,6 +14,7 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/google/uuid"
 )
 
 type RegisterRequest struct {
@@ -181,7 +182,7 @@ func (c *AuthController) Login(ctx *fiber.Ctx) error {
 		// Increment failed attempts
 		newAttempts, _ := c.authService.IncrementFailedLoginAttempts(req.Email)
 		auditLog(ctx, "LOGIN_FAILED", req.Email, "", fmt.Sprintf("Failed attempts: %d", newAttempts))
-		return utils.SendError(ctx, fiber.StatusUnauthorized, "Invalid credentials")
+		return utils.SendError(ctx, fiber.StatusUnauthorized, err.Error())
 	}
 
 	// 2. Check if Email is Verified
@@ -258,6 +259,7 @@ func (c *AuthController) Logout(ctx *fiber.Ctx) error {
 		})
 		if err == nil && token.Valid {
 			if claims, ok := token.Claims.(jwt.MapClaims); ok {
+				// 1. Blacklist Access Token (JWT) in Redis
 				if jti, ok := claims["jti"].(string); ok && jti != "" {
 					if expVal, ok := claims["exp"].(float64); ok {
 						remaining := time.Until(time.Unix(int64(expVal), 0))
@@ -266,6 +268,20 @@ func (c *AuthController) Logout(ctx *fiber.Ctx) error {
 							config.RedisClient.Set(redisCtx, "blacklist:jwt:"+jti, "1", remaining)
 						}
 					}
+				}
+
+				// 2. Revoke active Refresh Token session from GORM & Redis
+				var userID uuid.UUID
+				var sessionID uuid.UUID
+				if subStr, ok := claims["sub"].(string); ok {
+					userID, _ = uuid.Parse(subStr)
+				}
+				if sidStr, ok := claims["sid"].(string); ok {
+					sessionID, _ = uuid.Parse(sidStr)
+				}
+
+				if userID != uuid.Nil && sessionID != uuid.Nil {
+					_ = c.authService.RevokeSession(userID, sessionID)
 				}
 			}
 		}

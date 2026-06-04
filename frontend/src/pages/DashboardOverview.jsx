@@ -36,16 +36,16 @@ const DashboardOverview = ({
           <div className="space-y-2">
             <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/10 border border-white/15 backdrop-blur-sm">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-              <span className="text-[9px] font-extrabold uppercase tracking-widest text-indigo-100">Control Console</span>
+              <span className="text-[10px] font-extrabold uppercase tracking-widest text-indigo-100">Control Console</span>
             </div>
-            <h3 className="text-2xl sm:text-3xl font-black tracking-tight">Welcome Back, {getFirstName()}!</h3>
-            <p className="text-xs text-indigo-100/85 font-semibold max-w-xl leading-relaxed">
+            <h3 className="text-2xl sm:text-3.5xl font-black tracking-tight">Welcome Back, {getFirstName()}!</h3>
+            <p className="text-[13px] text-indigo-100/85 font-semibold max-w-xl leading-relaxed">
               This is the identity provider dashboard. Monitor operational metrics, configure OIDC clients, promote security credentials, and review live directory events.
             </p>
           </div>
 
           <div className="p-4 rounded-2xl bg-white/10 border border-white/15 backdrop-blur-sm shrink-0 flex flex-col items-center justify-center text-center">
-            <span className="text-[8px] font-extrabold uppercase tracking-wider text-indigo-200 block">System State</span>
+            <span className="text-[9px] font-extrabold uppercase tracking-wider text-indigo-200 block">System State</span>
             <span className="text-sm font-black text-white mt-1 uppercase tracking-wider">Operational</span>
           </div>
         </div>
@@ -106,7 +106,7 @@ const DashboardOverview = ({
 
         {/* Left column: Server System Health Diagnostics */}
         <div className="lg:col-span-1 p-6 border border-slate-200/50 dark:border-slate-800/80 bg-white/40 dark:bg-slate-950/15 backdrop-blur-md rounded-3xl space-y-4">
-          <h5 className="text-xs font-black uppercase text-slate-850 dark:text-white tracking-wider">
+          <h5 className="text-sm font-black uppercase text-slate-850 dark:text-white tracking-wider">
             Server Resource Auditing
           </h5>
 
@@ -115,9 +115,9 @@ const DashboardOverview = ({
               <div key={idx} className="p-3 bg-slate-100/50 dark:bg-slate-900/50 rounded-xl border border-slate-150/40 dark:border-slate-800/40 flex justify-between items-center text-xs">
                 <div>
                   <span className="font-bold text-slate-800 dark:text-slate-200 block">{sys.name}</span>
-                  <span className="text-[10px] text-slate-400 mt-0.5 block font-bold">{sys.value}</span>
+                  <span className="text-[11px] text-slate-400 mt-0.5 block font-bold">{sys.value}</span>
                 </div>
-                <span className="px-2 py-0.5 rounded-md text-[8px] font-extrabold uppercase bg-emerald-50 dark:bg-emerald-950 text-emerald-600 dark:text-emerald-400 tracking-wider">
+                <span className="px-2 py-0.5 rounded-md text-[9px] font-extrabold uppercase bg-emerald-50 dark:bg-emerald-950 text-emerald-600 dark:text-emerald-400 tracking-wider">
                   {sys.status}
                 </span>
               </div>
@@ -127,7 +127,7 @@ const DashboardOverview = ({
 
         {/* Right column: Recent Event Registry (Live Tickers Audit logs) */}
         <div className="lg:col-span-2 p-6 border border-slate-200/50 dark:border-slate-800/80 bg-white/40 dark:bg-slate-950/15 backdrop-blur-md rounded-3xl space-y-4">
-          <h5 className="text-xs font-black uppercase text-slate-850 dark:text-white tracking-wider">
+          <h5 className="text-sm font-black uppercase text-slate-850 dark:text-white tracking-wider">
             Recent System Activity Log
           </h5>
 

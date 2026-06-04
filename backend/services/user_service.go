@@ -11,6 +11,7 @@ import (
 
 	"backendify_idp/config"
 	"backendify_idp/models"
+	"backendify_idp/utils"
 
 	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
@@ -186,28 +187,59 @@ func (s *AuthService) UpdateUserRole(userIDStr string, roleName string, assign b
 		return errors.New("invalid user ID")
 	}
 
+	tx := config.DB.Begin()
+	if tx.Error != nil {
+		return tx.Error
+	}
+
 	var role models.Role
-	if err := config.DB.Where("role_name = ?", roleName).First(&role).Error; err != nil {
+	if err := tx.Where("role_name = ?", roleName).First(&role).Error; err != nil {
+		tx.Rollback()
 		return errors.New("role not found")
 	}
 
-	var dbErr error
 	if assign {
+		// Enforce mutual exclusivity
+		if roleName == "admin" {
+			// If assigning admin, remove all other roles for this user
+			if err := tx.Where("user_id = ?", userID).Delete(&models.UserRole{}).Error; err != nil {
+				tx.Rollback()
+				return err
+			}
+		} else {
+			// If assigning a non-admin role, remove the admin role if it currently exists for this user
+			var adminRole models.Role
+			if err := tx.Where("role_name = ?", "admin").First(&adminRole).Error; err == nil {
+				if err := tx.Where("user_id = ? AND role_id = ?", userID, adminRole.ID).Delete(&models.UserRole{}).Error; err != nil {
+					tx.Rollback()
+					return err
+				}
+			}
+		}
+
+		// Ensure the new role mapping is created
 		var count int64
-		config.DB.Model(&models.UserRole{}).Where("user_id = ? AND role_id = ?", userID, role.ID).Count(&count)
+		tx.Model(&models.UserRole{}).Where("user_id = ? AND role_id = ?", userID, role.ID).Count(&count)
 		if count == 0 {
 			userRole := models.UserRole{
 				UserID: userID,
 				RoleID: role.ID,
 			}
-			dbErr = config.DB.Create(&userRole).Error
+			if err := tx.Create(&userRole).Error; err != nil {
+				tx.Rollback()
+				return err
+			}
 		}
 	} else {
-		dbErr = config.DB.Where("user_id = ? AND role_id = ?", userID, role.ID).Delete(&models.UserRole{}).Error
+		// Just unassign the role
+		if err := tx.Where("user_id = ? AND role_id = ?", userID, role.ID).Delete(&models.UserRole{}).Error; err != nil {
+			tx.Rollback()
+			return err
+		}
 	}
 
-	if dbErr != nil {
-		return dbErr
+	if err := tx.Commit().Error; err != nil {
+		return err
 	}
 
 	// Evict user cache in Redis
@@ -316,50 +348,61 @@ func (s *AuthService) UnlockUser(userIDStr string) error {
 	return s.ResetFailedLoginAttempts(user.Email)
 }
 
-func (s *AuthService) InitiateEmailChange(userIDStr, currentEmail, newEmail string) (string, error) {
+func (s *AuthService) InitiateEmailChangeStep1(userIDStr string) (string, error) {
+	userID, err := uuid.Parse(userIDStr)
+	if err != nil {
+		return "", errors.New("invalid user ID")
+	}
+
+	// Fetch current email from DB
+	var user models.User
+	if err := config.DB.Select("email").Where("id = ?", userID).First(&user).Error; err != nil {
+		return "", errors.New("user not found")
+	}
+	currentEmail := user.Email
+
+	// Generate 6-digit numeric OTP
+	otp, err := utils.GenerateOTP(6)
+	if err != nil {
+		return "", err
+	}
+
+	// Save OTP in Redis with 5-minute TTL
+	ctx := context.Background()
+	err = config.RedisClient.Set(ctx, "email_change:otp:old:"+userIDStr, otp, 5*time.Minute).Err()
+	if err != nil {
+		return "", errors.New("failed to save OTP in cache")
+	}
+
+	// Dispatch OTP to current email
+	subject := "Change Email Request - Verification OTP"
+	body := "You requested to change your account email address.\r\n" +
+		"Please use the following 6-digit OTP to verify your identity:\r\n\r\n" +
+		"OTP Code: " + otp + "\r\n\r\n" +
+		"This code will expire in 5 minutes.\r\n"
+
+	go func() {
+		err := utils.SendEmail(currentEmail, subject, body)
+		if err != nil {
+			log.Printf("Failed to send step 1 OTP to %s: %v", currentEmail, err)
+		}
+	}()
+
+	log.Printf("[DEV] Step 1 OTP for User %s to old email (%s): %s", userIDStr, currentEmail, otp)
+
+	return otp, nil
+}
+
+func (s *AuthService) VerifyEmailChangeStep1(userIDStr, otp string) (string, error) {
 	_, err := uuid.Parse(userIDStr)
 	if err != nil {
 		return "", errors.New("invalid user ID")
 	}
 
-	// Generate secure verification token
-	bytes := make([]byte, 24)
-	if _, err := rand.Read(bytes); err != nil {
-		return "", err
-	}
-	token := hex.EncodeToString(bytes)
-
-	// Save change request payload in Redis with a 15-minute TTL
 	ctx := context.Background()
-	payload := map[string]string{
-		"new_email": newEmail,
-		"token":     token,
-	}
-	payloadJSON, err := json.Marshal(payload)
-	if err != nil {
-		return "", err
-	}
+	redisKey := "email_change:otp:old:" + userIDStr
 
-	err = config.RedisClient.Set(ctx, "email_change_request:"+userIDStr, payloadJSON, 15*time.Minute).Err()
-	if err != nil {
-		return "", errors.New("failed to initiate email change in cache")
-	}
-
-	log.Printf("[DEV] Email change token for User %s to %s: %s", userIDStr, newEmail, token)
-
-	return token, nil
-}
-
-func (s *AuthService) ConfirmEmailChange(userIDStr, token string) error {
-	userID, err := uuid.Parse(userIDStr)
-	if err != nil {
-		return errors.New("invalid user ID")
-	}
-
-	ctx := context.Background()
-	redisKey := "email_change_request:" + userIDStr
-
-	// Fetch and delete atomically using Lua script to prevent double-click race conditions
+	// Fetch and delete immediately to prevent replay attacks
 	script := `
 		local val = redis.call('get', KEYS[1])
 		if val then
@@ -370,14 +413,129 @@ func (s *AuthService) ConfirmEmailChange(userIDStr, token string) error {
 	res, err := config.RedisClient.Eval(ctx, script, []string{redisKey}).Result()
 	if err != nil {
 		if err.Error() == "redis: nil" {
-			return errors.New("email change session expired or not initiated")
+			return "", errors.New("OTP expired or not requested")
+		}
+		return "", err
+	}
+
+	cachedOtp, ok := res.(string)
+	if !ok || cachedOtp == "" {
+		return "", errors.New("OTP expired or not requested")
+	}
+
+	if cachedOtp != otp {
+		return "", errors.New("invalid OTP code")
+	}
+
+	// Generate secure temp_token
+	bytes := make([]byte, 24)
+	if _, err := rand.Read(bytes); err != nil {
+		return "", err
+	}
+	tempToken := hex.EncodeToString(bytes)
+
+	// Save temp_token in Redis with 10-minute TTL
+	sessionKey := "email_change:session:" + userIDStr
+	err = config.RedisClient.Set(ctx, sessionKey, tempToken, 10*time.Minute).Err()
+	if err != nil {
+		return "", errors.New("failed to create temporary session in cache")
+	}
+
+	return tempToken, nil
+}
+
+func (s *AuthService) CheckNewEmailStep2(userIDStr, tempToken, newEmail string) (string, error) {
+	userID, err := uuid.Parse(userIDStr)
+	if err != nil {
+		return "", errors.New("invalid user ID")
+	}
+
+	ctx := context.Background()
+	sessionKey := "email_change:session:" + userIDStr
+
+	// Validate tempToken
+	cachedToken, err := config.RedisClient.Get(ctx, sessionKey).Result()
+	if err != nil || cachedToken != tempToken {
+		return "", errors.New("invalid or expired verification session")
+	}
+
+	// Check if new email is already registered
+	var count int64
+	config.DB.Model(&models.User{}).Where("email = ? AND id != ?", newEmail, userID).Count(&count)
+	if count > 0 {
+		return "", errors.New("email address is already registered")
+	}
+
+	// Generate 6-digit OTP for new email
+	otp, err := utils.GenerateOTP(6)
+	if err != nil {
+		return "", err
+	}
+
+	// Store step 3 payload in Redis with 5-minute TTL
+	payload := map[string]string{
+		"new_email":  newEmail,
+		"otp":        otp,
+		"temp_token": tempToken,
+	}
+	payloadJSON, err := json.Marshal(payload)
+	if err != nil {
+		return "", err
+	}
+
+	step3Key := "email_change:step3:" + userIDStr
+	err = config.RedisClient.Set(ctx, step3Key, payloadJSON, 5*time.Minute).Err()
+	if err != nil {
+		return "", errors.New("failed to store step 3 state in cache")
+	}
+
+	// Dispatch OTP to the new email
+	subject := "Verify Your New Email Address - Verification OTP"
+	body := "You requested to change your account email address.\r\n" +
+		"Please use the following 6-digit OTP to verify ownership of your new email address:\r\n\r\n" +
+		"OTP Code: " + otp + "\r\n\r\n" +
+		"This code will expire in 5 minutes.\r\n"
+
+	go func() {
+		err := utils.SendEmail(newEmail, subject, body)
+		if err != nil {
+			log.Printf("Failed to send step 3 OTP to %s: %v", newEmail, err)
+		}
+	}()
+
+	log.Printf("[DEV] Step 3 OTP for User %s to new email (%s): %s", userIDStr, newEmail, otp)
+
+	return otp, nil
+}
+
+func (s *AuthService) ConfirmEmailChangeStep3(userIDStr, tempToken, otp string) error {
+	userID, err := uuid.Parse(userIDStr)
+	if err != nil {
+		return errors.New("invalid user ID")
+	}
+
+	ctx := context.Background()
+	step3Key := "email_change:step3:" + userIDStr
+
+	// Fetch and delete immediately to prevent replay attacks
+	script := `
+		local val = redis.call('get', KEYS[1])
+		if val then
+			redis.call('del', KEYS[1])
+		end
+		return val
+	`
+	res, err := config.RedisClient.Eval(ctx, script, []string{step3Key}).Result()
+	if err != nil {
+		if err.Error() == "redis: nil" {
+			return errors.New("verification session expired or not initiated")
 		}
 		return err
 	}
 
 	payloadStr, ok := res.(string)
 	if !ok || payloadStr == "" {
-		return errors.New("email change session expired or not initiated")
+		return errors.New("verification session expired or not initiated")
 	}
 
 	var payload map[string]string
@@ -385,24 +543,253 @@ func (s *AuthService) ConfirmEmailChange(userIDStr, token string) error {
 		return err
 	}
 
-	if payload["token"] != token {
-		return errors.New("invalid verification token")
+	// Validate tempToken and OTP
+	if payload["temp_token"] != tempToken {
+		return errors.New("invalid verification session")
+	}
+	if payload["otp"] != otp {
+		return errors.New("invalid OTP code for the new email")
 	}
 
 	newEmail := payload["new_email"]
 
-	// Check if the new email is already registered to another user in GORM
-	var count int64
-	config.DB.Model(&models.User{}).Where("email = ? AND id != ?", newEmail, userID).Count(&count)
-	if count > 0 {
-		return errors.New("email is already in use by another account")
+	// DB Transaction to ensure atomic updates
+	tx := config.DB.Begin()
+	if tx.Error != nil {
+		return tx.Error
 	}
 
-	// Update user email in GORM database
-	err = config.DB.Model(&models.User{}).Where("id = ?", userID).Update("email", newEmail).Error
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+		}
+	}()
+
+	// Double-check email availability with GORM lock/check
+	var count int64
+	if err := tx.Model(&models.User{}).Where("email = ? AND id != ?", newEmail, userID).Count(&count).Error; err != nil {
+		tx.Rollback()
+		return err
+	}
+	if count > 0 {
+		tx.Rollback()
+		return errors.New("email address is already registered to another user")
+	}
+
+	// Perform atomic update
+	err = tx.Model(&models.User{}).Where("id = ?", userID).Updates(map[string]interface{}{
+		"email":              newEmail,
+		"is_email_verified": true,
+	}).Error
+	if err != nil {
+		tx.Rollback()
+		return err
+	}
+
+	if err := tx.Commit().Error; err != nil {
+		return err
+	}
+
+	// Invalidate temporary token and active cached session
+	sessionKey := "email_change:session:" + userIDStr
+	config.RedisClient.Del(ctx, sessionKey)
+	config.RedisClient.Del(ctx, "user:cache:"+userIDStr)
+
+	return nil
+}
+
+func (s *AuthService) ChangePasswordStep1Verify(userIDStr, oldPassword string) (bool, string, error) {
+	userID, err := uuid.Parse(userIDStr)
+	if err != nil {
+		return false, "", errors.New("invalid request or verification failed")
+	}
+
+	var user models.User
+	if err := config.DB.Where("id = ?", userID).First(&user).Error; err != nil {
+		return false, "", errors.New("invalid request or verification failed")
+	}
+
+	// Verify old password hash
+	err = bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(oldPassword))
+	if err != nil {
+		return false, "", errors.New("invalid request or verification failed")
+	}
+
+	// Generate secure tempToken
+	bytes := make([]byte, 24)
+	if _, err := rand.Read(bytes); err != nil {
+		return false, "", err
+	}
+	tempToken := hex.EncodeToString(bytes)
+
+	// Determine initial step state based on MFA status
+	step := "authenticated"
+	if !user.MfaEnabled {
+		step = "mfa_verified"
+	}
+
+	// Save session in Redis
+	ctx := context.Background()
+	payload := map[string]string{
+		"step":       step,
+		"temp_token": tempToken,
+	}
+	payloadJSON, err := json.Marshal(payload)
+	if err != nil {
+		return false, "", err
+	}
+
+	sessionKey := "password_change:session:" + userIDStr
+	err = config.RedisClient.Set(ctx, sessionKey, payloadJSON, 10*time.Minute).Err()
+	if err != nil {
+		return false, "", errors.New("failed to save password change session in cache")
+	}
+
+	return user.MfaEnabled, tempToken, nil
+}
+
+func (s *AuthService) ChangePasswordStep2VerifyMFA(userIDStr, tempToken, code string) error {
+	userID, err := uuid.Parse(userIDStr)
+	if err != nil {
+		return errors.New("invalid request or verification failed")
+	}
+
+	ctx := context.Background()
+	sessionKey := "password_change:session:" + userIDStr
+
+	payloadStr, err := config.RedisClient.Get(ctx, sessionKey).Result()
+	if err != nil {
+		return errors.New("verification session expired or not initiated")
+	}
+
+	var payload map[string]string
+	if err := json.Unmarshal([]byte(payloadStr), &payload); err != nil {
+		return err
+	}
+
+	if payload["temp_token"] != tempToken || payload["step"] != "authenticated" {
+		return errors.New("invalid or expired verification session")
+	}
+
+	// Try validating TOTP code first
+	totpValid, err := s.VerifyMfaCode(userIDStr, code)
+	if !totpValid {
+		// Fallback to emergency backup code check
+		backupValid, errBackup := s.VerifyBackupCode(userID, code)
+		if errBackup != nil || !backupValid {
+			return errors.New("invalid verification code")
+		}
+	}
+
+	// Update step state to mfa_verified
+	payload["step"] = "mfa_verified"
+	payloadJSON, err := json.Marshal(payload)
 	if err != nil {
 		return err
 	}
+
+	err = config.RedisClient.Set(ctx, sessionKey, payloadJSON, 10*time.Minute).Err()
+	if err != nil {
+		return errors.New("failed to update password change session in cache")
+	}
+
+	return nil
+}
+
+func (s *AuthService) ChangePasswordStep3Update(userIDStr, tempToken, newPassword string) error {
+	userID, err := uuid.Parse(userIDStr)
+	if err != nil {
+		return errors.New("invalid request or verification failed")
+	}
+
+	ctx := context.Background()
+	sessionKey := "password_change:session:" + userIDStr
+
+	payloadStr, err := config.RedisClient.Get(ctx, sessionKey).Result()
+	if err != nil {
+		return errors.New("verification session expired or not initiated")
+	}
+
+	var payload map[string]string
+	if err := json.Unmarshal([]byte(payloadStr), &payload); err != nil {
+		return err
+	}
+
+	if payload["temp_token"] != tempToken || payload["step"] != "mfa_verified" {
+		return errors.New("invalid or expired verification session")
+	}
+
+	// Validate password strength
+	if len(newPassword) < 8 {
+		return errors.New("password must be at least 8 characters long")
+	}
+	if !utils.IsValidPassword(newPassword) {
+		return errors.New("password must contain uppercase, lowercase, numbers, and symbols")
+	}
+
+	// Hash password
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
+	if err != nil {
+		return err
+	}
+
+	// DB Transaction to ensure atomic updates and complete session revocation
+	tx := config.DB.Begin()
+	if tx.Error != nil {
+		return tx.Error
+	}
+
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+		}
+	}()
+
+	// Update user password
+	var user models.User
+	if err := tx.Where("id = ?", userID).First(&user).Error; err != nil {
+		tx.Rollback()
+		return errors.New("user not found")
+	}
+
+	if err := tx.Model(&user).Update("password_hash", string(hashedPassword)).Error; err != nil {
+		tx.Rollback()
+		return err
+	}
+
+	// Fetch all user sessions/refresh tokens to blacklist them in Redis
+	var sessions []models.RefreshToken
+	tx.Select("id").Where("user_id = ?", userID).Find(&sessions)
+
+	// Purge all active sessions in Database
+	if err := tx.Where("user_id = ?", userID).Delete(&models.RefreshToken{}).Error; err != nil {
+		tx.Rollback()
+		return err
+	}
+	if err := tx.Where("user_id = ?", userID).Delete(&models.AuthorizationCode{}).Error; err != nil {
+		tx.Rollback()
+		return err
+	}
+
+	if err := tx.Commit().Error; err != nil {
+		return err
+	}
+
+	// Blacklist all active session IDs in Redis
+	for _, sess := range sessions {
+		config.RedisClient.Set(ctx, "session:revoked:"+sess.ID.String(), "1", 24*time.Hour)
+	}
+
+	// Evict user cache in Redis
+	config.RedisClient.Del(ctx, "user:cache:"+userIDStr)
+	config.RedisClient.Del(ctx, sessionKey)
+
+	// Send notification email asynchronously
+	subject := "Security Notification: Password Changed"
+	body := "Your password has been changed successfully. If you did not perform this action, please contact support immediately."
+	go func() {
+		utils.SendEmail(user.Email, subject, body)
+	}()
 
 	return nil
 }

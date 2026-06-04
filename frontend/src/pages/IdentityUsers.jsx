@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import ConfirmationModal from '../components/ConfirmationModal';
 import MobileActionSheet from '../components/MobileActionSheet';
 
@@ -13,11 +14,13 @@ const IdentityUsers = ({
 }) => {
   const [query, setQuery] = useState('');
   
-  // Track active dropdown row ID
+  // Track active dropdown row ID & coordinates for absolute body-level Portal rendering
   const [activeDropdownId, setActiveDropdownId] = useState(null);
   const [activeRoleDropdownId, setActiveRoleDropdownId] = useState(null);
+  const [dropdownPos, setDropdownPos] = useState({ top: 0, left: 0 });
+  const [roleDropdownPos, setRoleDropdownPos] = useState({ top: 0, left: 0 });
 
-  // Global click outside listener to auto-close active dropdowns
+  // Global click outside, scroll, & resize listeners to auto-close active dropdowns
   useEffect(() => {
     const handleOutsideClick = (event) => {
       if (activeDropdownId) {
@@ -42,9 +45,19 @@ const IdentityUsers = ({
       }
     };
 
+    const handleScrollOrResize = () => {
+      setActiveDropdownId(null);
+      setActiveRoleDropdownId(null);
+    };
+
     document.addEventListener('mousedown', handleOutsideClick);
+    window.addEventListener('scroll', handleScrollOrResize, true);
+    window.addEventListener('resize', handleScrollOrResize);
+
     return () => {
       document.removeEventListener('mousedown', handleOutsideClick);
+      window.removeEventListener('scroll', handleScrollOrResize, true);
+      window.removeEventListener('resize', handleScrollOrResize);
     };
   }, [activeDropdownId, activeRoleDropdownId]);
 
@@ -66,12 +79,26 @@ const IdentityUsers = ({
     user: null,
   });
 
+  // Mobile Access Roles sheet state
+  const [roleSheet, setRoleSheet] = useState({
+    isOpen: false,
+    user: null,
+  });
+
   const openMobileSheet = useCallback((user) => {
     setMobileSheet({ isOpen: true, user });
   }, []);
 
   const closeMobileSheet = useCallback(() => {
     setMobileSheet({ isOpen: false, user: null });
+  }, []);
+
+  const openRoleSheet = useCallback((user) => {
+    setRoleSheet({ isOpen: true, user });
+  }, []);
+
+  const closeRoleSheet = useCallback(() => {
+    setRoleSheet({ isOpen: false, user: null });
   }, []);
 
   // Detect mobile via window width (≤768px)
@@ -111,8 +138,6 @@ const IdentityUsers = ({
   };
 
   const executeConfirmedAction = () => {
-    if (confirmInput.trim() !== confirmModal.userEmail) return;
-
     if (confirmModal.type === 'delete') {
       onDeleteUser(confirmModal.userId);
     } else if (confirmModal.type === 'banned') {
@@ -124,6 +149,7 @@ const IdentityUsers = ({
   const handleDirectAction = (type, userId) => {
     onStatusChange(userId, type);
     setActiveDropdownId(null); // close dropdown
+    closeMobileSheet(); // close mobile sheet
   };
 
   const getModalColorClasses = () => {
@@ -159,8 +185,8 @@ const IdentityUsers = ({
     <div className="space-y-6 animate-fade-in text-left">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h4 className="text-lg font-black text-slate-900 dark:text-white uppercase tracking-wider">Identity User Directory</h4>
-          <p className="text-[11px] text-slate-500 dark:text-slate-400 font-semibold mt-1">
+          <h4 className="font-black text-slate-900 dark:text-white uppercase tracking-wider">Identity User Directory</h4>
+          <p className="text-[13px] text-slate-500 dark:text-slate-400 font-semibold mt-1">
             Audit registered identities, promotion state claims, and status suspension records.
           </p>
         </div>
@@ -241,7 +267,7 @@ const IdentityUsers = ({
                     
                     {/* Status cell */}
                     <td className="px-6 py-4">
-                      <span className={`px-2 py-0.5 rounded-full text-[8.5px] border font-extrabold tracking-wider uppercase ${
+                      <span className={`px-2 py-0.5 rounded-full text-[9.5px] border font-extrabold tracking-wider uppercase ${
                         user.status === 'active' 
                           ? 'bg-emerald-50 text-emerald-700 border-emerald-100 dark:bg-emerald-950/20 dark:text-emerald-400 dark:border-emerald-900/30' 
                           : user.status === 'suspended'
@@ -254,7 +280,7 @@ const IdentityUsers = ({
                     
                     {/* MFA status cell */}
                     <td className="px-6 py-4">
-                      <span className={`px-2 py-0.5 rounded-full text-[8.5px] border font-extrabold tracking-wider uppercase ${
+                      <span className={`px-2 py-0.5 rounded-full text-[9.5px] border font-extrabold tracking-wider uppercase ${
                         user.mfa_enabled 
                           ? 'bg-purple-50 text-purple-700 border-purple-100 dark:bg-purple-950/20 dark:text-purple-400 dark:border-purple-900/30' 
                           : 'bg-slate-50 text-slate-400 border-slate-200 dark:bg-slate-900/20 dark:text-slate-500 dark:border-slate-800'
@@ -269,16 +295,30 @@ const IdentityUsers = ({
                         {user.roles?.map((r) => (
                           <span
                             key={r}
-                            className="px-2 py-0.5 rounded-full text-[8.5px] font-extrabold bg-indigo-50 dark:bg-indigo-950/30 text-indigo-700 dark:text-indigo-400 border border-indigo-100/50 dark:border-indigo-900/20 uppercase tracking-wide"
+                            className="px-2 py-0.5 rounded-full text-[9.5px] font-extrabold bg-indigo-50 dark:bg-indigo-950/30 text-indigo-700 dark:text-indigo-400 border border-indigo-100/50 dark:border-indigo-900/20 uppercase tracking-wide"
                           >
                             {r}
                           </span>
-                        ))}
-
-                        {currentUserRoles.includes('admin') && !isSelf && (
+                        ))}                        {currentUserRoles.includes('admin') && !isSelf && (
                           <button
                             id={`role-btn-${user.id}`}
-                            onClick={() => setActiveRoleDropdownId(activeRoleDropdownId === user.id ? null : user.id)}
+                            onClick={(e) => {
+                              if (isMobile) {
+                                openRoleSheet(user);
+                              } else {
+                                if (activeRoleDropdownId === user.id) {
+                                  setActiveRoleDropdownId(null);
+                                } else {
+                                  const rect = e.currentTarget.getBoundingClientRect();
+                                  setRoleDropdownPos({
+                                    top: rect.bottom + window.scrollY + 4,
+                                    left: rect.left + window.scrollX
+                                  });
+                                  setActiveRoleDropdownId(user.id);
+                                  setActiveDropdownId(null);
+                                }
+                              }
+                            }}
                             className="p-1 rounded-lg border border-dashed border-slate-350 dark:border-slate-800 text-slate-455 hover:text-indigo-650 hover:border-indigo-600 transition-all cursor-pointer flex items-center justify-center shrink-0 active:scale-95"
                             title="Manage user access roles"
                           >
@@ -288,12 +328,11 @@ const IdentityUsers = ({
                           </button>
                         )}
 
-                        {activeRoleDropdownId === user.id && (
+                        {!isMobile && activeRoleDropdownId === user.id && createPortal(
                           <div
                             id={`role-dropdown-${user.id}`}
-                            className={`absolute left-6 w-44 rounded-2xl border border-slate-250/80 dark:border-slate-800 bg-white dark:bg-[#0f172a] shadow-2xl p-1.5 z-40 animate-scale-up text-left ${
-                              isLastFewRows ? 'bottom-full mb-1' : 'top-full mt-1'
-                            }`}
+                            style={{ position: 'absolute', top: roleDropdownPos.top, left: roleDropdownPos.left }}
+                            className="w-44 rounded-2xl border border-slate-250/80 dark:border-slate-800 bg-white dark:bg-[#0f172a] shadow-2xl p-1.5 z-[9999] animate-scale-up text-left"
                           >
                             <div className="px-2 py-1 text-[8px] font-black uppercase text-slate-400 dark:text-slate-500 tracking-wider mb-1">
                               Manage Roles
@@ -320,7 +359,8 @@ const IdentityUsers = ({
                                 </button>
                               );
                             })}
-                          </div>
+                          </div>,
+                          document.body
                         )}
                       </div>
                     </td>
@@ -330,14 +370,24 @@ const IdentityUsers = ({
                        <button
                          id={`btn-${user.id}`}
                          disabled={isSelf}
-                         onClick={() => {
+                         onClick={(e) => {
                            if (isMobile) {
                              openMobileSheet(user);
                            } else {
-                             setActiveDropdownId(activeDropdownId === user.id ? null : user.id);
+                             if (activeDropdownId === user.id) {
+                               setActiveDropdownId(null);
+                             } else {
+                               const rect = e.currentTarget.getBoundingClientRect();
+                               setDropdownPos({
+                                 top: rect.bottom + window.scrollY + 4,
+                                 left: rect.right - 192 + window.scrollX
+                               });
+                               setActiveDropdownId(user.id);
+                               setActiveRoleDropdownId(null);
+                             }
                            }
                          }}
-                         className="px-3 py-1.5 rounded-xl border border-slate-200/60 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-350 hover:bg-slate-50 dark:hover:bg-slate-850 active:scale-95 transition-all text-[10px] font-extrabold uppercase tracking-wider flex items-center gap-1.5 ml-auto cursor-pointer disabled:opacity-40 disabled:pointer-events-none"
+                         className="px-3 py-1.5 rounded-xl border border-slate-200/60 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-350 hover:bg-slate-50 dark:hover:bg-slate-850 active:scale-95 transition-all text-xs font-extrabold uppercase tracking-wider flex items-center gap-1.5 ml-auto cursor-pointer disabled:opacity-40 disabled:pointer-events-none"
                        >
                          Actions
                          <svg className={`w-3 h-3 text-slate-450 transition-transform duration-200 ${!isMobile && activeDropdownId === user.id ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
@@ -345,13 +395,11 @@ const IdentityUsers = ({
                          </svg>
                        </button>
 
-                      {/* Dropdown overlay card */}
-                      {!isMobile && activeDropdownId === user.id && (
+                      {!isMobile && activeDropdownId === user.id && createPortal(
                          <div 
                            id={`dropdown-${user.id}`}
-                           className={`absolute right-6 w-48 rounded-2xl border border-slate-250/80 dark:border-slate-800 bg-white dark:bg-[#0f172a] shadow-2xl p-1.5 z-40 animate-scale-up text-left ${
-                            isLastFewRows ? 'bottom-full mb-1' : 'top-full mt-1'
-                          }`}
+                           style={{ position: 'absolute', top: dropdownPos.top, left: dropdownPos.left }}
+                           className="w-48 rounded-2xl border border-slate-250/80 dark:border-slate-800 bg-white dark:bg-[#0f172a] shadow-2xl p-1.5 z-[9999] animate-scale-up text-left"
                          >
                             
                             {/* Update State category */}
@@ -371,10 +419,18 @@ const IdentityUsers = ({
                             <button
                               disabled={user.status === 'suspended'}
                               onClick={() => handleDirectAction('suspended', user.id)}
-                              className="w-full flex items-center gap-2.5 px-2.5 py-2 text-[10px] font-bold uppercase tracking-wide text-slate-700 dark:text-slate-300 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800/60 cursor-pointer disabled:opacity-45 disabled:pointer-events-none text-left"
+                              className="w-full flex items-center gap-2.5 px-2.5 py-2 text-[10px] font-bold uppercase tracking-wide text-slate-700 dark:text-slate-350 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800/60 cursor-pointer disabled:opacity-45 disabled:pointer-events-none text-left"
                             >
                               <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" />
                               Suspend
+                            </button>
+
+                            <button
+                              onClick={() => handleDirectAction('unlock', user.id)}
+                              className="w-full flex items-center gap-2.5 px-2.5 py-2 text-[10px] font-bold uppercase tracking-wide text-slate-700 dark:text-slate-350 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800/60 cursor-pointer text-left"
+                            >
+                              <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 shrink-0" />
+                              Unlock Account
                             </button>
 
                             {/* Divider */}
@@ -397,16 +453,17 @@ const IdentityUsers = ({
                             {currentUserRoles.includes('admin') && (
                               <button
                                 onClick={() => openConfirmModal('delete', user.id, user.full_name || user.email, user.email)}
-                                className="w-full flex items-center gap-2.5 px-2.5 py-2 text-[10px] font-bold uppercase tracking-wide text-rose-650 dark:text-rose-450 rounded-xl hover:bg-rose-50/50 dark:hover:bg-rose-950/20 cursor-pointer disabled:opacity-45 disabled:pointer-events-none text-left"
+                                className="w-full flex items-center gap-2.5 px-2.5 py-2 text-[10px] font-bold uppercase tracking-wide text-rose-650 dark:text-rose-455 rounded-xl hover:bg-rose-50/50 dark:hover:bg-rose-950/20 cursor-pointer disabled:opacity-45 disabled:pointer-events-none text-left"
                               >
                                 <span className="w-1.5 h-1.5 rounded-full bg-rose-600 shrink-0" />
                                 Delete Account
                               </button>
                             )}
 
-                          </div>
+                          </div>,
+                          document.body
                       )}
-                    </td>
+                     </td>
 
                   </tr>
                 );
@@ -457,6 +514,11 @@ const IdentityUsers = ({
               icon: <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>,
               onClick: () => handleDirectAction('suspended', mobileSheet.user.id),
             },
+            {
+              label: 'Unlock Account',
+              icon: <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>,
+              onClick: () => handleDirectAction('unlock', mobileSheet.user.id),
+            },
             { type: 'divider', label: 'Danger Zone' },
             {
               label: 'Ban Account',
@@ -472,6 +534,34 @@ const IdentityUsers = ({
               onClick: () => openConfirmModal('delete', mobileSheet.user.id, mobileSheet.user.full_name || mobileSheet.user.email, mobileSheet.user.email),
             }] : []),
           ]}
+        />
+      )}
+      {/* Mobile Access Roles Bottom Sheet */}
+      {roleSheet.user && (
+        <MobileActionSheet
+          isOpen={roleSheet.isOpen}
+          onClose={closeRoleSheet}
+          title={`Roles: ${roleSheet.user.full_name || roleSheet.user.email}`}
+          subtitle="Configure system authority claims"
+          items={['admin', 'idp_support', 'developer', 'user'].map((roleName) => {
+            // Find current user's updated state dynamically from the list (or props)
+            const targetUser = usersList.find(u => u.id === roleSheet.user.id) || roleSheet.user;
+            const hasRole = targetUser.roles?.includes(roleName);
+            return {
+              label: roleName.replace('_', ' ').toUpperCase(),
+              icon: hasRole ? (
+                <svg className="w-5 h-5 text-indigo-500 shrink-0" fill="none" stroke="currentColor" strokeWidth="3" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                </svg>
+              ) : (
+                <span className="w-5 h-5 border-2 border-slate-300 dark:border-slate-700 rounded-lg shrink-0 block" />
+              ),
+              preventClose: true,
+              onClick: () => {
+                onRoleToggle(targetUser.id, targetUser.roles || [], roleName);
+              }
+            };
+          })}
         />
       )}
     </div>

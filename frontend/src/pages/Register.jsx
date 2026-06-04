@@ -4,13 +4,13 @@ import AlertModal from '../components/AlertModal';
 import AuthLayouts from '../layouts/AuthLayouts';
 import AuthBrandPanel from '../components/AuthBrandPanel';
 
-const Register = ({ onRegisterSuccess, onNavigateToLogin }) => {
-  const [email, setEmail] = useState('');
+const Register = ({ onRegisterSuccess, onNavigateToLogin, initialEmail = '', initialIsVerifying = false }) => {
+  const [email, setEmail] = useState(initialEmail);
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
 
   // OTP Verification state
-  const [isVerifying, setIsVerifying] = useState(false);
+  const [isVerifying, setIsVerifying] = useState(initialIsVerifying);
   const [otp, setOtp] = useState('');
 
   // Loading & Alert state

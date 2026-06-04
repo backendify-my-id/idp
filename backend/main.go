@@ -3,8 +3,10 @@ package main
 import (
 	"log"
 	"os"
+	"time"
 
 	"backendify_idp/config"
+	"backendify_idp/models"
 	"backendify_idp/routes"
 
 	"github.com/gofiber/fiber/v2"
@@ -48,6 +50,22 @@ func main() {
 
 	// Setup Routes
 	routes.SetupRoutes(app)
+
+	// Start Background Garbage Collector for Refresh Tokens
+	go func() {
+		ticker := time.NewTicker(12 * time.Hour)
+		defer ticker.Stop()
+		for range ticker.C {
+			log.Println("[GC] Running database session cleanup...")
+			// Delete permanently all revoked or expired tokens from PostgreSQL
+			result := config.DB.Where("revoked = ? OR expires_at < NOW()", true).Delete(&models.RefreshToken{})
+			if result.Error != nil {
+				log.Printf("[GC Error] Failed to purge expired sessions: %v", result.Error)
+			} else {
+				log.Printf("[GC] Successfully purged %d obsolete sessions from database.", result.RowsAffected)
+			}
+		}
+	}()
 
 	// Start Server
 	port := os.Getenv("APP_PORT")

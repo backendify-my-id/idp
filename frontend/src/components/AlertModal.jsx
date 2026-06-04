@@ -1,7 +1,7 @@
 import React from 'react';
 import { createPortal } from 'react-dom';
 
-const AlertModal = ({ isOpen, onClose, title, message, type = 'info' }) => {
+const AlertModal = ({ isOpen, onClose, title, message, type = 'info', customAction = null }) => {
   if (!isOpen) return null;
 
   const config = {
@@ -54,12 +54,25 @@ const AlertModal = ({ isOpen, onClose, title, message, type = 'info' }) => {
           <h3 className={`text-2xl font-black mb-3 tracking-tight ${current.textColor}`}>{title}</h3>
           <p className="text-slate-500 dark:text-slate-400 leading-relaxed mb-6 font-semibold text-xs">{message}</p>
           
-          <button
-            onClick={onClose}
-            className={`w-full py-2.5 px-4 rounded-xl shadow-lg font-bold text-sm tracking-wide focus:outline-none focus:ring-2 focus:ring-offset-2 transition-all duration-200 transform active:scale-95 cursor-pointer ${current.btnColor}`}
-          >
-            Okay, Got it
-          </button>
+          <div className="flex flex-col gap-2">
+            <button
+              onClick={onClose}
+              className={`w-full py-2.5 px-4 rounded-xl shadow-lg font-bold text-sm tracking-wide focus:outline-none focus:ring-2 focus:ring-offset-2 transition-all duration-200 transform active:scale-95 cursor-pointer ${current.btnColor}`}
+            >
+              Okay, Got it
+            </button>
+            {customAction && (
+              <button
+                onClick={() => {
+                  onClose();
+                  customAction.onClick();
+                }}
+                className="w-full py-2.5 px-4 rounded-xl border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-900 text-slate-700 dark:text-slate-300 font-bold text-sm tracking-wide transition-all transform active:scale-95 cursor-pointer"
+              >
+                {customAction.label}
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </div>,

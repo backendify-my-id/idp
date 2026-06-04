@@ -1,5 +1,5 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
-import { isTokenExpired } from '../services/api';
+import { isTokenExpired, logoutUser } from '../services/api';
 
 const AuthContext = createContext();
 
@@ -23,6 +23,7 @@ export const AuthProvider = ({ children }) => {
 
   const login = (accessToken, refreshToken) => {
     localStorage.setItem('idp_token', accessToken);
+    localStorage.setItem('idp_active_tab', 'dashboard');
     if (refreshToken) {
       localStorage.setItem('idp_refresh_token', refreshToken);
     } else {
@@ -33,8 +34,13 @@ export const AuthProvider = ({ children }) => {
   };
 
   const logout = () => {
+    const savedToken = localStorage.getItem('idp_token');
+    if (savedToken) {
+      logoutUser(savedToken).catch(err => console.error("Session logout error:", err));
+    }
     localStorage.removeItem('idp_token');
     localStorage.removeItem('idp_refresh_token');
+    localStorage.removeItem('idp_active_tab');
     setToken(null);
     setIsAuthenticated(false);
   };

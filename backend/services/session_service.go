@@ -50,6 +50,18 @@ func (s *AuthService) CreateRefreshToken(userID uuid.UUID, clientID *uuid.UUID, 
 		return "", "", err
 	}
 
+	// Record permanent Login History
+	loginHistory := models.LoginHistory{
+		UserID:    userID,
+		IpAddress: ipAddress,
+		UserAgent: userAgent,
+	}
+	_ = config.DB.Create(&loginHistory).Error
+
+	// Update User's LastLoginAt field
+	now := time.Now()
+	_ = config.DB.Model(&models.User{}).Where("id = ?", userID).Update("last_login_at", &now).Error
+
 	// Fetch user email to cache along with session for stateless JWT generation compatibility
 	var user models.User
 	if err := config.DB.Select("email").Where("id = ?", userID).First(&user).Error; err != nil {

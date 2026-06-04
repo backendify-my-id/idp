@@ -5,7 +5,7 @@ import AuthLayouts from '../layouts/AuthLayouts';
 import AuthBrandPanel from '../components/AuthBrandPanel';
 import VerificationCodeInput from '../components/VerificationCodeInput';
 
-const Login = ({ onLoginSuccess, onNavigateToRegister }) => {
+const Login = ({ onLoginSuccess, onNavigateToRegister, onNavigateToResetPassword, onNavigateToVerifyEmail }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   
@@ -76,11 +76,36 @@ const Login = ({ onLoginSuccess, onNavigateToRegister }) => {
           }, 1500);
         }
       } else {
+        const isUnverified = res._status === 403 || res.message?.toLowerCase().includes('verify');
+        const isSuspended = res.message?.toLowerCase().includes('suspended');
+        const isBanned = res.message?.toLowerCase().includes('banned');
+        
+        let alertTitle = 'Authentication Error';
+        let alertMessage = res.message || 'Invalid email or password combination.';
+        let customAction = null;
+
+        if (isUnverified) {
+          alertTitle = 'Email Unverified';
+          customAction = {
+            label: 'Verify Email Address Now',
+            onClick: () => {
+              onNavigateToVerifyEmail(email);
+            }
+          };
+        } else if (isSuspended) {
+          alertTitle = 'Account Suspended';
+          alertMessage = 'Your account has been temporarily suspended due to a policy violation or administrator action. Please contact support to resolve this issue.';
+        } else if (isBanned) {
+          alertTitle = 'Account Banned';
+          alertMessage = 'Your account has been permanently banned from the identity directory. Access is strictly denied.';
+        }
+
         setAlert({
           isOpen: true,
-          title: 'Authentication Error',
-          message: res.message || 'Invalid email or password combination.',
+          title: alertTitle,
+          message: alertMessage,
           type: 'error',
+          customAction: customAction
         });
       }
     }
@@ -114,7 +139,7 @@ const Login = ({ onLoginSuccess, onNavigateToRegister }) => {
               <h2 className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white tracking-tight">
                 {isMfaRequired ? 'Enter MFA Code' : 'Welcome Back'}
               </h2>
-              <p className="text-slate-500 dark:text-slate-400 text-sm font-medium mt-1.5">
+              <p className="text-slate-500 dark:text-slate-400 text-sm font-medium mt-1.5 font-sans">
                 {isMfaRequired 
                   ? 'Verify authentication with your 6-digit MFA app code.' 
                   : 'Sign in to access your secure dashboard registry.'
@@ -138,7 +163,7 @@ const Login = ({ onLoginSuccess, onNavigateToRegister }) => {
                   />
                 </div>
 
-                <div>
+                 <div>
                   <label className="block text-[10px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2 text-left">
                     Password
                   </label>
@@ -175,7 +200,14 @@ const Login = ({ onLoginSuccess, onNavigateToRegister }) => {
               />
             )}
 
-            <div className="mt-7 pt-5 border-t border-slate-100 dark:border-slate-800/60 flex flex-col items-center gap-3">
+            <div className="mt-7 pt-5 border-t border-slate-100 dark:border-slate-800/60 flex items-center justify-between gap-4">
+              <button
+                type="button"
+                onClick={() => onNavigateToResetPassword(email)}
+                className="text-xs font-bold text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-300 transition-colors cursor-pointer"
+              >
+                Forgot Password?
+              </button>
               <button
                 onClick={onNavigateToRegister}
                 className="text-xs font-bold text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-300 transition-colors cursor-pointer"
@@ -193,6 +225,7 @@ const Login = ({ onLoginSuccess, onNavigateToRegister }) => {
         title={alert.title}
         message={alert.message}
         type={alert.type}
+        customAction={alert.customAction}
       />
     </AuthLayouts>
   );

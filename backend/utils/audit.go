@@ -8,6 +8,9 @@ import (
 	"log"
 	"os"
 	"time"
+
+	"backendify_idp/config"
+	"backendify_idp/models"
 )
 
 type SecurityAuditLog struct {
@@ -52,5 +55,20 @@ func LogSecurityEvent(actorID string, action string, email string, ip string, us
 		log.Printf("[AUDIT_JSON] %s", string(jsonData))
 	} else {
 		log.Printf("Failed to marshal audit log: %v", err)
+	}
+
+	if config.DB != nil {
+		event := models.AuditEvent{
+			Timestamp: time.Now(),
+			ActorID:   actorID,
+			Action:    action,
+			EmailHash: emailHash,
+			IpAddress: ip,
+			UserAgent: userAgent,
+			Details:   details,
+		}
+		if err := config.DB.Create(&event).Error; err != nil {
+			log.Printf("Failed to persist audit log to DB: %v", err)
+		}
 	}
 }

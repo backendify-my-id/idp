@@ -45,12 +45,14 @@ const DashboardLayout = ({ children, user, activeTab, setActiveTab, onLogout, no
   const getRoleColor = () => {
     if (hasRole('admin')) return 'from-indigo-500 to-purple-600 border-indigo-200/40 text-indigo-700 dark:text-indigo-300';
     if (hasRole('idp_support')) return 'from-emerald-500 to-cyan-600 border-emerald-200/40 text-emerald-700 dark:text-emerald-300';
+    if (hasRole('developer')) return 'from-blue-500 to-indigo-600 border-blue-200/40 text-blue-700 dark:text-blue-300';
     return 'from-slate-400 to-slate-500 border-slate-200/40 text-slate-700 dark:text-slate-350';
   };
 
   const getRoleLabel = () => {
     if (hasRole('admin')) return 'ADMINISTRATOR';
     if (hasRole('idp_support')) return 'IDP SUPPORT';
+    if (hasRole('developer')) return 'DEVELOPER';
     return 'STANDARD USER';
   };
 
@@ -74,7 +76,7 @@ const DashboardLayout = ({ children, user, activeTab, setActiveTab, onLogout, no
           <path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
         </svg>
       ),
-      visible: true
+      visible: hasRole('admin')
     },
     {
       id: 'profile',
@@ -104,7 +106,7 @@ const DashboardLayout = ({ children, user, activeTab, setActiveTab, onLogout, no
           <path strokeLinecap="round" strokeLinejoin="round" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
         </svg>
       ),
-      visible: hasRole('admin')
+      visible: hasRole('admin') || hasRole('developer')
     },
     {
       id: 'users',
@@ -115,6 +117,16 @@ const DashboardLayout = ({ children, user, activeTab, setActiveTab, onLogout, no
         </svg>
       ),
       visible: hasRole('admin') || hasRole('idp_support')
+    },
+    {
+      id: 'audit-logs',
+      label: 'Audit Logs',
+      icon: (
+        <svg className="w-5 h-5 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+        </svg>
+      ),
+      visible: hasRole('admin')
     }
   ];
 
@@ -428,7 +440,7 @@ const DashboardLayout = ({ children, user, activeTab, setActiveTab, onLogout, no
           </header>
 
           {/* Core Dynamic Content Frame */}
-          <main className="p-4 sm:p-6 lg:p-8 h-[calc(100dvh-80px)] overflow-y-auto overflow-x-hidden scrollbar-thin w-full max-w-7xl mx-auto space-y-6">
+          <main className="p-4 sm:p-6 lg:p-8 h-[calc(100dvh-80px)] overflow-y-auto overflow-x-hidden scrollbar-thin w-full max-w-[1600px] mx-auto space-y-6">
             {children}
           </main>
 

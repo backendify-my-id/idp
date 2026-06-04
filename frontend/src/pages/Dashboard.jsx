@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { getProfile, updateProfile, getMfaSetup, enableMfa, disableMfa,
-  getClients, createClient, deleteClient, getUsers, updateUserRole, updateUserStatus, deleteUser,
+  getClients, createClient, updateClient, deleteClient, getUsers, updateUserRole, updateUserStatus, unlockUser, deleteUser,
   getNotifications, createNotification, markNotificationsRead
 } from '../services/api';
 import AlertModal from '../components/AlertModal';
@@ -13,6 +13,7 @@ import SecurityMfa from './SecurityMfa';
 import OidcClients from './OidcClients';
 import IdentityUsers from './IdentityUsers';
 import DashboardOverview from './DashboardOverview';
+import AuditLogs from './AuditLogs';
 
 const Dashboard = ({ token, onLogout }) => {
   const [activeTab, setActiveTab] = useState(() => {
@@ -166,6 +167,8 @@ const Dashboard = ({ token, onLogout }) => {
 
   // Real-Time WebSocket Connection & Stream emulator Fallback
   useEffect(() => {
+    if (!roles.includes('admin')) return;
+
     const now = new Date();
     const initialData = Array.from({ length: 12 }, (_, i) => {
       const timeStr = new Date(now.getTime() - (11 - i) * 3000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
@@ -215,7 +218,7 @@ const Dashboard = ({ token, onLogout }) => {
       }
       clearInterval(fallbackIntervalRef.current);
     };
-  }, [activeSessions]);
+  }, [activeSessions, roles]);
 
   const handleNewDataPoint = (reqs, sessions) => {
     const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
@@ -382,6 +385,23 @@ const Dashboard = ({ token, onLogout }) => {
     }
   };
 
+  const handleUpdateClientClick = async (id, name, isPkceRequired, redirectUrls) => {
+    const res = await updateClient(token, id, {
+      client_name: name,
+      is_pkce_required: isPkceRequired,
+      redirect_urls: redirectUrls.filter(u => u.trim() !== '')
+    });
+    if (res.success) {
+      addNotification(`OIDC Registry: Client "${name}" updated successfully.`);
+      setAlert({ isOpen: true, title: 'Client Updated', message: `OIDC Client "${name}" configuration updated.`, type: 'success' });
+      fetchClients();
+      return true;
+    } else {
+      setAlert({ isOpen: true, title: 'Error', message: res.message, type: 'error' });
+      return false;
+    }
+  };
+
   const handleAddUrlField = () => setRedirectUrls([...redirectUrls, '']);
   const handleRemoveUrlField = (idx) => setRedirectUrls(redirectUrls.filter((_, i) => i !== idx));
 
@@ -398,13 +418,19 @@ const Dashboard = ({ token, onLogout }) => {
   };
 
   const handleStatusChange = async (id, newStatus) => {
-    const res = await updateUserStatus(token, id, newStatus);
+    let res;
+    if (newStatus === 'unlock') {
+      res = await unlockUser(token, id);
+    } else {
+      res = await updateUserStatus(token, id, newStatus);
+    }
     if (res.success) {
-      addNotification(`Directory: User status changed to ${newStatus}.`);
+      const msg = newStatus === 'unlock' ? 'User lockout attempts reset successfully.' : `User status changed to ${newStatus}.`;
+      addNotification(`Directory: ${msg}`);
       setAlert({
         isOpen: true,
-        title: 'Status Updated',
-        message: `User status successfully set to ${newStatus}.`,
+        title: newStatus === 'unlock' ? 'Account Unlocked' : 'Status Updated',
+        message: newStatus === 'unlock' ? 'User account was successfully unlocked.' : `User status successfully set to ${newStatus}.`,
         type: 'success'
       });
       fetchUsers();
@@ -466,7 +492,7 @@ const Dashboard = ({ token, onLogout }) => {
             />
           )}
 
-          {activeTab === 'analytics' && (
+          {activeTab === 'analytics' && roles.includes('admin') && (
             <Analytics
               socketStatus={socketStatus}
               activeSessions={activeSessions}
@@ -490,6 +516,7 @@ const Dashboard = ({ token, onLogout }) => {
               currentEmail={email}
               onEmailChanged={(newEmail) => setEmail(newEmail)}
               setAlert={setAlert}
+              onLogout={onLogout}
             />
           )}
 
@@ -513,7 +540,7 @@ const Dashboard = ({ token, onLogout }) => {
             />
           )}
 
-          {activeTab === 'clients' && roles.includes('admin') && (
+          {activeTab === 'clients' && (roles.includes('admin') || roles.includes('developer')) && (
             <OidcClients
               clientName={clientName}
               setClientName={setClientName}
@@ -526,6 +553,7 @@ const Dashboard = ({ token, onLogout }) => {
               clientsList={clientsList}
               isLoadingClients={isLoadingClients}
               onCreateClient={handleCreateClientSubmit}
+              onUpdateClient={handleUpdateClientClick}
               onDeleteClient={handleDeleteClientClick}
               onAddUrlField={handleAddUrlField}
               onRemoveUrlField={handleRemoveUrlField}
@@ -542,6 +570,10 @@ const Dashboard = ({ token, onLogout }) => {
               onDeleteUser={handleDeleteUser}
               currentUserRoles={roles}
             />
+          )}
+
+          {activeTab === 'audit-logs' && roles.includes('admin') && (
+            <AuditLogs token={token} />
           )}
         </>
       )}

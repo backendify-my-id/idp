@@ -44,13 +44,14 @@ type UserRole struct {
 }
 
 type Client struct {
-	ID               uuid.UUID `gorm:"type:uuid;default:gen_random_uuid();primaryKey"`
-	AppClientID      string    `gorm:"column:client_id;type:varchar(255);not null"`
-	ClientName       string    `gorm:"type:varchar(255);not null"`
-	ClientSecretHash string    `gorm:"type:text;not null"`
-	IsPkceRequired   bool      `gorm:"default:true"`
-	CreatedAt        time.Time `gorm:"default:CURRENT_TIMESTAMP"`
-	UpdatedAt        time.Time `gorm:"default:CURRENT_TIMESTAMP"`
+	ID               uuid.UUID  `gorm:"type:uuid;default:gen_random_uuid();primaryKey"`
+	AppClientID      string     `gorm:"column:client_id;type:varchar(255);not null"`
+	ClientName       string     `gorm:"type:varchar(255);not null"`
+	ClientSecretHash string     `gorm:"type:text;not null"`
+	IsPkceRequired   bool       `gorm:"default:true"`
+	UserID           *uuid.UUID `gorm:"type:uuid;column:user_id"`
+	CreatedAt        time.Time  `gorm:"default:CURRENT_TIMESTAMP"`
+	UpdatedAt        time.Time  `gorm:"default:CURRENT_TIMESTAMP"`
 }
 
 type ClientRedirectUrl struct {
@@ -126,4 +127,24 @@ type MfaBackupCode struct {
 	Used      bool      `gorm:"default:false"`
 	CreatedAt time.Time `gorm:"default:CURRENT_TIMESTAMP"`
 	User      User      `gorm:"constraint:OnDelete:CASCADE;"`
+}
+
+type LoginHistory struct {
+	ID        uuid.UUID `gorm:"type:uuid;default:gen_random_uuid();primaryKey"`
+	UserID    uuid.UUID `gorm:"type:uuid;not null"`
+	IpAddress string    `gorm:"type:varchar(45)"`
+	UserAgent string    `gorm:"type:text"`
+	LoginAt   time.Time `gorm:"default:CURRENT_TIMESTAMP"`
+	User      User      `gorm:"constraint:OnDelete:CASCADE;"`
+}
+
+type AuditEvent struct {
+	ID        uint      `gorm:"primaryKey;autoIncrement"`
+	Timestamp time.Time `gorm:"default:CURRENT_TIMESTAMP"`
+	ActorID   string    `gorm:"type:varchar(100)"`
+	Action    string    `gorm:"type:varchar(100);not null"`
+	EmailHash string    `gorm:"type:varchar(100)"`
+	IpAddress string    `gorm:"type:varchar(45)"`
+	UserAgent string    `gorm:"type:text"`
+	Details   string    `gorm:"type:text"`
 }

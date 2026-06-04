@@ -33,6 +33,7 @@ type ClientDTO struct {
 	ClientName     string   `json:"client_name"`
 	IsPkceRequired bool     `json:"is_pkce_required"`
 	RedirectURLs   []string `json:"redirect_urls"`
+	UserID         *string  `json:"user_id"`
 	CreatedAt      string   `json:"created_at"`
 }
 
@@ -56,6 +57,11 @@ func (s *AuthService) AuthenticateUser(email, password string) (*models.User, er
 	}
 
 	if user.Status != "active" {
+		if user.Status == "suspended" {
+			return nil, errors.New("your account is temporarily suspended. please contact support")
+		} else if user.Status == "banned" {
+			return nil, errors.New("your account has been permanently banned. access denied")
+		}
 		return nil, fmt.Errorf("account status is '%s'. please contact support", user.Status)
 	}
 

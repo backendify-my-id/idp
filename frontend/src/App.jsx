@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ThemeProvider, useTheme } from './context/ThemeContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import Dashboard from './pages/Dashboard';
 import ResetPassword from './pages/ResetPassword';
+import Consent from './pages/Consent';
 
 const MainApp = () => {
   const { token, isAuthenticated, login, logout } = useAuth();
@@ -13,6 +14,20 @@ const MainApp = () => {
   const [resetEmail, setResetEmail] = useState('');
   const [verifyEmailAddr, setVerifyEmailAddr] = useState('');
   const [verifyOnRegister, setVerifyOnRegister] = useState(false);
+
+  // If user is authenticated and OIDC query parameters are present on login/home path, redirect back to backend authorize endpoint
+  useEffect(() => {
+    if (isAuthenticated) {
+      const params = new URLSearchParams(window.location.search);
+      const clientId = params.get('client_id');
+      const redirectUri = params.get('redirect_uri');
+      
+      if (clientId && redirectUri && window.location.pathname !== '/consent') {
+        const authorizeUrl = `http://localhost:8800/authorize${window.location.search}&token=${token}`;
+        window.location.href = authorizeUrl;
+      }
+    }
+  }, [isAuthenticated, token]);
 
   if (!isAuthenticated) {
     if (currentPage === 'register') {
@@ -64,6 +79,10 @@ const MainApp = () => {
         }}
       />
     );
+  }
+
+  if (window.location.pathname === '/consent') {
+    return <Consent />;
   }
 
   return (

@@ -138,8 +138,11 @@ func (s *AuthService) SendVerificationOTP(email string) (string, error) {
 	// Try sending SMTP email (do not block flow if SMTP fails)
 	go func() {
 		subject := "Verify Your Backendify IdP Account"
-		body := fmt.Sprintf("Hello,\n\nThank you for registering at Backendify Identity Provider.\nYour account verification code is: %s\n\nThis code will expire in 5 minutes.\n\nRegards,\nBackendify Team", otp)
-		err := utils.SendEmail(email, subject, body)
+		title := "Verifikasi Akun"
+		subtitle := "Aktivasi Identitas Pengguna"
+		body := "Terima kasih telah mendaftar di Backendify Identity Provider. Silakan verifikasi alamat email Anda dengan menggunakan kode OTP 6-digit di bawah ini."
+		warning := "Jika Anda tidak mendaftarkan akun di Backendify, silakan abaikan email ini secara aman."
+		err := utils.SendHTMLTemplateEmail(email, subject, title, subtitle, body, otp, "5 Menit", warning)
 		if err != nil {
 			log.Printf("Warning: Failed to send SMTP email: %v", err)
 		} else {
@@ -229,11 +232,11 @@ func (s *AuthService) SendPasswordResetOTP(email string) (string, error) {
 
 	go func() {
 		subject := "Backendify IdP - Password Reset Code"
-		body := fmt.Sprintf(
-			"Hello,\n\nYour password reset verification code is: %s\n\nThis code will expire in 15 minutes.\n\nIf you did not request this, please ignore this email.\n\nRegards,\nBackendify Team",
-			otp,
-		)
-		if err := utils.SendEmail(email, subject, body); err != nil {
+		title := "Atur Ulang Kata Sandi"
+		subtitle := "Keamanan Kredensial Pengguna"
+		body := "Kami menerima permintaan untuk mengatur ulang kata sandi akun Anda. Gunakan kode verifikasi di bawah ini untuk melanjutkan pemulihan kata sandi."
+		warning := "Jika Anda tidak meminta pengaturan ulang kata sandi ini, harap abaikan email ini secara aman atau hubungi administrator jika Anda merasa akun Anda dalam bahaya."
+		if err := utils.SendHTMLTemplateEmail(email, subject, title, subtitle, body, otp, "15 Menit", warning); err != nil {
 			log.Printf("Warning: Failed to send password reset email: %v", err)
 		}
 	}()

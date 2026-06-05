@@ -376,13 +376,13 @@ func (s *AuthService) InitiateEmailChangeStep1(userIDStr string) (string, error)
 
 	// Dispatch OTP to current email
 	subject := "Change Email Request - Verification OTP"
-	body := "You requested to change your account email address.\r\n" +
-		"Please use the following 6-digit OTP to verify your identity:\r\n\r\n" +
-		"OTP Code: " + otp + "\r\n\r\n" +
-		"This code will expire in 5 minutes.\r\n"
+	title := "Verifikasi Perubahan Email"
+	subtitle := "Langkah 1: Verifikasi Identitas Email Lama"
+	bodyText := "Anda telah meminta untuk mengubah alamat email terdaftar pada akun Anda. Silakan verifikasi identitas email lama Anda menggunakan kode OTP di bawah ini."
+	warning := "Jika Anda tidak meminta perubahan email ini, harap segera amankan akun Anda atau hubungi tim administrasi."
 
 	go func() {
-		err := utils.SendEmail(currentEmail, subject, body)
+		err := utils.SendHTMLTemplateEmail(currentEmail, subject, title, subtitle, bodyText, otp, "5 Menit", warning)
 		if err != nil {
 			log.Printf("Failed to send step 1 OTP to %s: %v", currentEmail, err)
 		}
@@ -491,13 +491,13 @@ func (s *AuthService) CheckNewEmailStep2(userIDStr, tempToken, newEmail string) 
 
 	// Dispatch OTP to the new email
 	subject := "Verify Your New Email Address - Verification OTP"
-	body := "You requested to change your account email address.\r\n" +
-		"Please use the following 6-digit OTP to verify ownership of your new email address:\r\n\r\n" +
-		"OTP Code: " + otp + "\r\n\r\n" +
-		"This code will expire in 5 minutes.\r\n"
+	title := "Konfirmasi Email Baru"
+	subtitle := "Langkah 3: Konfirmasi Kepemilikan Email Baru"
+	bodyText := "Langkah terakhir untuk memperbarui email Anda. Silakan verifikasi kepemilikan alamat email baru ini dengan menggunakan kode OTP di bawah ini."
+	warning := "Jika Anda tidak mengajukan perubahan email ini, abaikan email ini secara aman."
 
 	go func() {
-		err := utils.SendEmail(newEmail, subject, body)
+		err := utils.SendHTMLTemplateEmail(newEmail, subject, title, subtitle, bodyText, otp, "5 Menit", warning)
 		if err != nil {
 			log.Printf("Failed to send step 3 OTP to %s: %v", newEmail, err)
 		}
@@ -786,9 +786,13 @@ func (s *AuthService) ChangePasswordStep3Update(userIDStr, tempToken, newPasswor
 
 	// Send notification email asynchronously
 	subject := "Security Notification: Password Changed"
-	body := "Your password has been changed successfully. If you did not perform this action, please contact support immediately."
+	title := "Kata Sandi Diperbarui"
+	subtitle := "Notifikasi Keamanan Akun"
+	bodyText := "Kata sandi untuk akun Backendify Anda telah berhasil diubah secara aman. Semua sesi login aktif lainnya di perangkat lain telah dinonaktifkan demi keselamatan Anda."
+	warning := "Jika Anda tidak melakukan perubahan ini, silakan hubungi tim administrator atau dukungan kami segera untuk mengunci akun Anda."
+
 	go func() {
-		utils.SendEmail(user.Email, subject, body)
+		_ = utils.SendHTMLTemplateEmail(user.Email, subject, title, subtitle, bodyText, "", "", warning)
 	}()
 
 	return nil

@@ -116,7 +116,44 @@ func (c *AuthController) Authorize(ctx *fiber.Ctx) error {
 		return utils.SendError(ctx, fiber.StatusInternalServerError, "Failed to parse user ID")
 	}
 
-	// User is authenticated! Create authorization code
+	// Filter requested scopes to unique and supported ones to prevent duplicate/invalid scope infinite redirect loops
+	requestedScopes := strings.Fields(scope)
+	supportedScopes := map[string]bool{
+		"openid":  true,
+		"email":   true,
+		"profile": true,
+		"roles":   true,
+	}
+	uniqueRequestedScopes := make([]string, 0)
+	seen := make(map[string]bool)
+	for _, s := range requestedScopes {
+		if supportedScopes[s] && !seen[s] {
+			seen[s] = true
+			uniqueRequestedScopes = append(uniqueRequestedScopes, s)
+		}
+	}
+	if len(uniqueRequestedScopes) == 0 {
+		// OIDC standard requires at least openid
+		uniqueRequestedScopes = []string{"openid"}
+	}
+
+	// Check if user has already granted consent for all requested unique scopes
+	var grantedCount int64
+	if err := config.DB.Model(&models.UserAuthorization{}).
+		Joins("JOIN scopes ON scopes.id = user_authorizations.scope_id").
+		Where("user_authorizations.user_id = ? AND user_authorizations.client_id = ? AND scopes.scope_name IN ?", userID, client.ID, uniqueRequestedScopes).
+		Count(&grantedCount).Error; err != nil {
+		grantedCount = 0
+	}
+
+	// If user has not authorized all unique requested scopes, redirect to Consent Screen page
+	if int(grantedCount) < len(uniqueRequestedScopes) {
+		consentURL := fmt.Sprintf("%s/consent?client_id=%s&redirect_uri=%s&response_type=%s&scope=%s&state=%s&code_challenge=%s&code_challenge_method=%s",
+			frontendURL, clientID, redirectURI, responseType, scope, state, codeChallenge, codeChallengeMethod)
+		return ctx.Redirect(consentURL)
+	}
+
+	// User is authenticated and has consented! Create authorization code
 	code, err := c.authService.CreateAuthorizationCode(userID, client.ID, codeChallenge, codeChallengeMethod, scope)
 	if err != nil {
 		return utils.SendError(ctx, fiber.StatusInternalServerError, "Failed to create authorization code")
@@ -281,5 +318,88 @@ func (c *AuthController) OpenIDConfiguration(ctx *fiber.Ctx) error {
 		"subject_types_supported":               []string{"public"},
 		"id_token_signing_alg_values_supported": []string{"HS256"},
 		"scopes_supported":                      []string{"openid", "email", "profile", "roles"},
+	})
+}
+
+type ConsentRequest struct {
+	ClientID string   `json:"client_id"`
+	Scopes   []string `json:"scopes"`
+}
+
+func (c *AuthController) SubmitConsent(ctx *fiber.Ctx) error {
+	userIDStr := getLocalString(ctx, "user_id")
+	if userIDStr == "" {
+		return utils.SendError(ctx, fiber.StatusUnauthorized, "Unauthorized")
+	}
+
+	userID, err := uuid.Parse(userIDStr)
+	if err != nil {
+		return utils.SendError(ctx, fiber.StatusBadRequest, "Invalid user ID")
+	}
+
+	var req ConsentRequest
+	if err := ctx.BodyParser(&req); err != nil {
+		return utils.SendError(ctx, fiber.StatusBadRequest, "Invalid request payload")
+	}
+
+	if req.ClientID == "" {
+		return utils.SendError(ctx, fiber.StatusBadRequest, "client_id is required")
+	}
+
+	// Verify client exists
+	var client models.Client
+	if err := config.DB.Where("client_id = ?", req.ClientID).First(&client).Error; err != nil {
+		return utils.SendError(ctx, fiber.StatusBadRequest, "Client not found")
+	}
+
+	// Save authorizations
+	tx := config.DB.Begin()
+	for _, scName := range req.Scopes {
+		var scope models.Scope
+		if err := tx.Where("scope_name = ?", scName).Limit(1).Find(&scope).Error; err != nil {
+			continue
+		}
+		if scope.ID == 0 {
+			// Skip scopes that do not exist
+			continue
+		}
+
+		// Check if already authorized
+		var count int64
+		if err := tx.Model(&models.UserAuthorization{}).Where("user_id = ? AND client_id = ? AND scope_id = ?", userID, client.ID, scope.ID).Count(&count).Error; err != nil {
+			tx.Rollback()
+			return utils.SendError(ctx, fiber.StatusInternalServerError, "Failed to check consent authorization")
+		}
+		if count == 0 {
+			auth := models.UserAuthorization{
+				UserID:   userID,
+				ClientID: client.ID,
+				ScopeID:  scope.ID,
+			}
+			if err := tx.Create(&auth).Error; err != nil {
+				tx.Rollback()
+				return utils.SendError(ctx, fiber.StatusInternalServerError, "Failed to save consent authorization")
+			}
+		}
+	}
+	tx.Commit()
+
+	return utils.SendSuccess(ctx, fiber.StatusOK, "Consent registered successfully", nil)
+}
+
+func (c *AuthController) GetClientPublicInfo(ctx *fiber.Ctx) error {
+	clientID := ctx.Params("client_id")
+	if clientID == "" {
+		return utils.SendError(ctx, fiber.StatusBadRequest, "Client ID is required")
+	}
+
+	var client models.Client
+	if err := config.DB.Where("client_id = ?", clientID).First(&client).Error; err != nil {
+		return utils.SendError(ctx, fiber.StatusNotFound, "Client not found")
+	}
+
+	return utils.SendSuccess(ctx, fiber.StatusOK, "Client details retrieved", fiber.Map{
+		"client_name": client.ClientName,
+		"client_id":   client.AppClientID,
 	})
 }

@@ -25,7 +25,7 @@ apiClient.interceptors.response.use(
 );
 
 // Token Utilities
-const decodeJwt = (token) => {
+export const decodeJwt = (token) => {
   try {
     return JSON.parse(atob(token.split('.')[1]));
   } catch {
@@ -140,6 +140,12 @@ export const unlockUser = (token, id) =>
 
 export const deleteUser = (token, id) =>
   apiClient.delete(`/admin/users/${id}`, authConfig(token));
+
+export const getClientPublicInfo = (clientId) =>
+  apiClient.get(`/oidc/client/${clientId}`);
+
+export const submitConsent = (token, clientId, scopes) =>
+  apiClient.post('/oidc/consent', { client_id: clientId, scopes }, authConfig(token));
 
 // ─── Notification Endpoints ────────────────────────────────────────────────────
 export const getNotifications = (token) =>

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { getAuditLogs } from '../services/api';
 
 const COMMON_ACTIONS = [
@@ -117,6 +118,27 @@ const formatTime = (timeString) => {
   }
 };
 
+const convertToCSV = (logsArray) => {
+  const headers = ['ID', 'Action', 'Timestamp', 'Actor ID', 'IP Address', 'Email Hash', 'Details', 'User Agent'];
+  const rows = logsArray.map(log => [
+    log.ID || '',
+    log.Action || '',
+    log.Timestamp || '',
+    log.ActorID || '',
+    log.IpAddress || '',
+    log.EmailHash || '',
+    (log.Details || '').replace(/"/g, '""'),
+    (log.UserAgent || '').replace(/"/g, '""')
+  ]);
+
+  const csvContent = [
+    headers.join(','),
+    ...rows.map(row => row.map(val => `"${val}"`).join(','))
+  ].join('\r\n');
+
+  return csvContent;
+};
+
 const AuditLogs = ({ token }) => {
   const [logs, setLogs] = useState([]);
   const [total, setTotal] = useState(0);
@@ -127,6 +149,73 @@ const AuditLogs = ({ token }) => {
   const [action, setAction] = useState('');
   const [loading, setLoading] = useState(false);
   const [selectedLog, setSelectedLog] = useState(null);
+  const [copied, setCopied] = useState(false);
+
+  // Reset copy state when selected log changes
+  useEffect(() => {
+    setCopied(false);
+  }, [selectedLog]);
+
+  const handleCopyDetails = (text) => {
+    if (!text) return;
+    navigator.clipboard.writeText(text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const [exporting, setExporting] = useState(false);
+
+  const handleExport = async (format) => {
+    if (total === 0) return;
+    setExporting(true);
+    try {
+      const res = await getAuditLogs(token, 1, total, action, search);
+      if (res && res.success) {
+        const allLogs = res.data.logs || [];
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+        const filename = `audit_logs_${timestamp}`;
+
+        if (format === 'json') {
+          const blob = new Blob([JSON.stringify(allLogs, null, 2)], { type: 'application/json;charset=utf-8;' });
+          const url = URL.createObjectURL(blob);
+          const downloadAnchor = document.createElement('a');
+          downloadAnchor.setAttribute("href", url);
+          downloadAnchor.setAttribute("download", `${filename}.json`);
+          document.body.appendChild(downloadAnchor);
+          downloadAnchor.click();
+          downloadAnchor.remove();
+          URL.revokeObjectURL(url);
+        } else if (format === 'csv') {
+          const csvContent = convertToCSV(allLogs);
+          const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+          const url = URL.createObjectURL(blob);
+          const downloadAnchor = document.createElement('a');
+          downloadAnchor.setAttribute("href", url);
+          downloadAnchor.setAttribute("download", `${filename}.csv`);
+          document.body.appendChild(downloadAnchor);
+          downloadAnchor.click();
+          downloadAnchor.remove();
+          URL.revokeObjectURL(url);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to export audit logs', err);
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  // Lock body scroll when inspector modal is open
+  useEffect(() => {
+    if (selectedLog) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [selectedLog]);
 
   // Fetch function
   const fetchLogs = async (currentPage, filterAction, searchStr) => {
@@ -180,7 +269,7 @@ const AuditLogs = ({ token }) => {
       </div>
 
       {/* Filter and Search Panel */}
-      <div className="p-4 sm:p-5 rounded-3xl bg-white dark:bg-[#0b0f19] border border-slate-200/50 dark:border-slate-850/50 shadow-sm flex flex-col md:flex-row gap-4 items-center justify-between">
+      <div className="p-4 sm:p-5 rounded-3xl bg-white dark:bg-[#0b0f19] border border-slate-200/50 dark:border-slate-850/50 shadow-sm flex flex-col lg:flex-row gap-4 items-center justify-between">
         <form onSubmit={handleSearchSubmit} className="flex flex-1 flex-col sm:flex-row gap-3 w-full">
           <div className="relative flex-1">
             <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400">
@@ -227,6 +316,33 @@ const AuditLogs = ({ token }) => {
             )}
           </div>
         </form>
+
+        {/* Export Actions Group */}
+        <div className="flex gap-2 w-full lg:w-auto shrink-0 justify-end border-t lg:border-t-0 pt-3 lg:pt-0 border-slate-100 dark:border-slate-800/60">
+          <button
+            type="button"
+            disabled={exporting || total === 0}
+            onClick={() => handleExport('csv')}
+            className="flex items-center gap-1.5 px-4 py-2.5 bg-slate-50 hover:bg-slate-100 dark:bg-slate-900/40 hover:dark:bg-slate-900/80 border border-slate-200/60 dark:border-slate-800/60 text-slate-700 dark:text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed rounded-2xl text-xs font-extrabold uppercase tracking-wider transition active:scale-98 cursor-pointer shrink-0"
+          >
+            <svg className="w-3.5 h-3.5 text-indigo-500" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+            </svg>
+            <span>{exporting ? 'Exporting...' : 'Export CSV'}</span>
+          </button>
+          
+          <button
+            type="button"
+            disabled={exporting || total === 0}
+            onClick={() => handleExport('json')}
+            className="flex items-center gap-1.5 px-4 py-2.5 bg-slate-50 hover:bg-slate-100 dark:bg-slate-900/40 hover:dark:bg-slate-900/80 border border-slate-200/60 dark:border-slate-800/60 text-slate-700 dark:text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed rounded-2xl text-xs font-extrabold uppercase tracking-wider transition active:scale-98 cursor-pointer shrink-0"
+          >
+            <svg className="w-3.5 h-3.5 text-purple-500" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+            </svg>
+            <span>{exporting ? 'Exporting...' : 'Export JSON'}</span>
+          </button>
+        </div>
       </div>
 
       {/* Main timeline listing container */}
@@ -379,87 +495,162 @@ const AuditLogs = ({ token }) => {
         )}
       </div>
 
-      {/* Inspect Log Details Modal Overlay */}
-      {selectedLog && (
-        <div className="fixed inset-0 z-55 flex items-center justify-center p-4">
+      {/* Inspect Log Details Modal Overlay using React Portal */}
+      {selectedLog && createPortal(
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
           <div 
             onClick={() => setSelectedLog(null)} 
             className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm transition-opacity" 
           />
           
-          <div className="relative bg-white dark:bg-[#0b0f19] border border-slate-200 dark:border-slate-800/80 w-full max-w-2xl rounded-3xl shadow-2xl p-6 sm:p-8 animate-scale-up text-left overflow-hidden z-10 max-h-[85vh] flex flex-col">
+          <div className="relative bg-white dark:bg-[#0f172a] border border-slate-200/80 dark:border-slate-800/80 w-full max-w-xl rounded-3xl shadow-2xl p-6 sm:p-7 animate-scale-up text-left overflow-hidden z-10 max-h-[85vh] flex flex-col">
             
             {/* Modal Header */}
-            <div className="flex justify-between items-start pb-4 border-b border-slate-100 dark:border-slate-800/60 mb-6">
+            <div className="flex justify-between items-start pb-4 border-b border-slate-100 dark:border-slate-800/60 mb-5 shrink-0">
               <div>
                 <span className="text-[10px] font-black uppercase text-indigo-500 tracking-wider">Inspect Event Payload</span>
-                <h3 className="text-base sm:text-lg font-black text-slate-800 dark:text-white mt-0.5">{selectedLog.Action}</h3>
+                <h3 className="text-base sm:text-lg font-black text-slate-850 dark:text-white mt-0.5">{selectedLog.Action}</h3>
               </div>
               <button 
                 onClick={() => setSelectedLog(null)}
-                className="p-1 rounded-xl text-slate-400 hover:text-slate-650 hover:bg-slate-100 dark:hover:bg-slate-900 transition cursor-pointer"
+                className="p-1.5 rounded-full text-slate-400 hover:text-slate-700 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition duration-200 cursor-pointer"
               >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                <svg className="w-4.5 h-4.5" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                 </svg>
               </button>
             </div>
 
             {/* Modal Scrollable Contents */}
-            <div className="space-y-5 overflow-y-auto flex-1 pr-1.5 scrollbar-thin">
+            <div className="space-y-5 overflow-y-auto flex-1 pr-1 scrollbar-thin">
               
+              {/* Context metadata (2 columns) */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="p-3 bg-slate-50 dark:bg-slate-900/40 border border-slate-100 dark:border-slate-800/40 rounded-2xl">
-                  <span className="text-[9px] font-extrabold uppercase text-slate-400 block tracking-wider">Timestamp (Local)</span>
-                  <span className="text-xs font-bold text-slate-700 dark:text-slate-350 block mt-1">{formatTime(selectedLog.Timestamp)}</span>
-                </div>
-                <div className="p-3 bg-slate-50 dark:bg-slate-900/40 border border-slate-100 dark:border-slate-800/40 rounded-2xl">
-                  <span className="text-[9px] font-extrabold uppercase text-slate-400 block tracking-wider">IP Address</span>
-                  <span className="text-xs font-bold text-slate-700 dark:text-slate-350 block mt-1">{selectedLog.IpAddress || 'N/A'}</span>
-                </div>
-              </div>
-
-              <div className="space-y-3.5">
-                <div className="p-3 bg-slate-50 dark:bg-slate-900/40 border border-slate-100 dark:border-slate-800/40 rounded-2xl">
-                  <span className="text-[9px] font-extrabold uppercase text-slate-400 block tracking-wider">Actor ID / Sub claim</span>
-                  <span className="text-xs font-bold text-slate-700 dark:text-slate-350 block mt-1 font-mono break-all">{selectedLog.ActorID || 'N/A'}</span>
+                
+                {/* Timestamp */}
+                <div className="p-4 bg-slate-50/50 dark:bg-slate-900/30 border border-slate-200/40 dark:border-slate-800/40 rounded-2xl flex flex-col justify-between">
+                  <span className="text-[10px] font-bold uppercase text-slate-400 dark:text-slate-500 tracking-wider flex items-center gap-1.5 select-none">
+                    <svg className="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    Timestamp (Local)
+                  </span>
+                  <span className="text-xs font-bold text-slate-750 dark:text-slate-200 mt-2 block">{formatTime(selectedLog.Timestamp)}</span>
                 </div>
 
-                <div className="p-3 bg-slate-50 dark:bg-slate-900/40 border border-slate-100 dark:border-slate-800/40 rounded-2xl">
-                  <div className="flex justify-between items-center">
-                    <span className="text-[9px] font-extrabold uppercase text-slate-400 tracking-wider">GDPR Email Hash (HMAC-SHA255)</span>
-                    <span className="text-[8px] font-extrabold bg-emerald-50 text-emerald-600 dark:bg-emerald-950/20 dark:text-emerald-400 px-1.5 py-0.5 rounded border border-emerald-100/30">Compliant</span>
+                {/* IP Address */}
+                <div className="p-4 bg-slate-50/50 dark:bg-slate-900/30 border border-slate-200/40 dark:border-slate-800/40 rounded-2xl flex flex-col justify-between">
+                  <span className="text-[10px] font-bold uppercase text-slate-400 dark:text-slate-500 tracking-wider flex items-center gap-1.5 select-none">
+                    <svg className="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 21a9.004 9.004 0 008.716-6.747M12 21a9.004 9.004 0 01-8.716-6.747M12 21c2.485 0 4.5-4.03 4.5-9S14.485 3 12 3m0 18c-2.485 0-4.5-4.03-4.5-9s2.015-9 4.5-9m0 0a9.003 9.003 0 018.716 6.747M12 3a9.003 9.003 0 00-8.716 6.747M3 12h18" />
+                    </svg>
+                    IP Address
+                  </span>
+                  <span className="text-xs font-bold text-slate-750 dark:text-slate-200 mt-2 block">{selectedLog.IpAddress || 'N/A'}</span>
+                </div>
+
+                {/* Separator / Category Line */}
+                <div className="col-span-full border-t border-slate-100 dark:border-slate-800/60 my-1" />
+
+                {/* Actor ID (Sub Claim) */}
+                <div className="col-span-full space-y-1.5">
+                  <span className="text-[10px] font-bold uppercase text-slate-400 dark:text-slate-500 tracking-wider flex items-center gap-1.5 select-none">
+                    <svg className="w-3.5 h-3.5 text-indigo-500" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
+                    </svg>
+                    Actor ID (Subject Claim)
+                  </span>
+                  <div className="p-3.5 bg-slate-100/50 dark:bg-slate-950/40 border border-slate-250/30 dark:border-slate-850/30 rounded-2xl">
+                    <span className="text-[11px] font-semibold font-mono text-slate-800 dark:text-slate-350 break-all select-all">{selectedLog.ActorID || 'N/A'}</span>
                   </div>
-                  <span className="text-[10.5px] font-bold text-slate-700 dark:text-slate-350 block mt-1.5 font-mono break-all">{selectedLog.EmailHash || 'N/A'}</span>
                 </div>
 
-                <div className="p-3 bg-slate-50 dark:bg-slate-900/40 border border-slate-100 dark:border-slate-800/40 rounded-2xl">
-                  <span className="text-[9px] font-extrabold uppercase text-slate-400 block tracking-wider">User Agent String</span>
-                  <span className="text-xs font-bold text-slate-700 dark:text-slate-350 block mt-1.5 leading-relaxed break-words">{selectedLog.UserAgent || 'N/A'}</span>
+                {/* GDPR Email Hash */}
+                <div className="col-span-full space-y-1.5">
+                  <div className="flex justify-between items-center select-none">
+                    <span className="text-[10px] font-bold uppercase text-slate-400 dark:text-slate-500 tracking-wider flex items-center gap-1.5">
+                      <svg className="w-3.5 h-3.5 text-emerald-500" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.57-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z" />
+                      </svg>
+                      GDPR Email Hash (HMAC-SHA256)
+                    </span>
+                    <span className="text-[8px] font-extrabold bg-emerald-50/80 text-emerald-600 dark:bg-emerald-950/20 dark:text-emerald-400 px-1.5 py-0.5 rounded border border-emerald-100/30">Compliant</span>
+                  </div>
+                  <div className="p-3.5 bg-slate-100/50 dark:bg-slate-950/40 border border-slate-250/30 dark:border-slate-850/30 rounded-2xl">
+                    <span className="text-[11px] font-semibold font-mono text-slate-800 dark:text-slate-350 break-all select-all">{selectedLog.EmailHash || 'N/A'}</span>
+                  </div>
                 </div>
 
-                <div className="p-4 bg-slate-50 dark:bg-slate-900/40 border border-slate-100 dark:border-slate-800/40 rounded-2xl">
-                  <span className="text-[9px] font-extrabold uppercase text-slate-400 block tracking-wider mb-2">Event Detail Summary</span>
-                  <p className="text-xs font-bold text-slate-700 dark:text-slate-300 leading-relaxed bg-white dark:bg-slate-900 border border-slate-200/40 dark:border-slate-800/60 p-3 rounded-xl font-mono">
+                {/* User Agent */}
+                <div className="col-span-full space-y-1.5">
+                  <span className="text-[10px] font-bold uppercase text-slate-400 dark:text-slate-500 tracking-wider flex items-center gap-1.5 select-none">
+                    <svg className="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 17.25v1.007a3 3 0 01-.879 2.122L7.5 21h9l-.621-.621A3 3 0 0115 18.257V17.25m6-12V15a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 15V5.25m18 0A2.25 2.25 0 0018.75 3H5.25A2.25 2.25 0 003 5.25m18 0V12a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 12V5.25" />
+                    </svg>
+                    User Agent Client
+                  </span>
+                  <div className="p-3.5 bg-slate-50/60 dark:bg-slate-900/40 border border-slate-250/30 dark:border-slate-850/30 rounded-2xl">
+                    <span className="text-[11.5px] font-medium text-slate-650 dark:text-slate-350 leading-relaxed break-words block">{selectedLog.UserAgent || 'N/A'}</span>
+                  </div>
+                </div>
+
+                {/* Separator / Category Line */}
+                <div className="col-span-full border-t border-slate-100 dark:border-slate-800/60 my-1" />
+
+                {/* Detail Summary */}
+                <div className="col-span-full space-y-2.5">
+                  <div className="flex justify-between items-center select-none">
+                    <span className="text-[10px] font-bold uppercase text-slate-400 dark:text-slate-500 tracking-wider flex items-center gap-1.5">
+                      <svg className="w-3.5 h-3.5 text-purple-500" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M14.25 9.75L16.5 12l-2.25 2.25m-4.5 0L7.5 12l2.25-2.25M6 20.25h12A2.25 2.25 0 0020.25 18V6A2.25 2.25 0 0018 3.75H6A2.25 2.25 0 003.75 6v12A2.25 2.25 0 006 20.25z" />
+                      </svg>
+                      Event Detail Summary / Payload
+                    </span>
+                    {selectedLog.Details && (
+                      <button
+                        onClick={() => handleCopyDetails(selectedLog.Details)}
+                        className="px-2.5 py-1 text-[9px] font-extrabold uppercase tracking-wider text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 bg-slate-100/70 hover:bg-slate-200/75 dark:bg-slate-900/60 dark:hover:bg-slate-800/80 rounded-lg border border-slate-200/40 dark:border-slate-850/50 transition duration-150 flex items-center gap-1 cursor-pointer"
+                      >
+                        {copied ? (
+                          <>
+                            <svg className="w-2.5 h-2.5 text-emerald-500" fill="none" stroke="currentColor" strokeWidth="3" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                            </svg>
+                            <span>Copied</span>
+                          </>
+                        ) : (
+                          <>
+                            <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M8 7.5a3 3 0 013-3h3.5m-3.5 3h-4a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h5m0 0v5m0-5L14 9" />
+                            </svg>
+                            <span>Copy</span>
+                          </>
+                        )}
+                      </button>
+                    )}
+                  </div>
+                  <div className="text-xs font-mono leading-relaxed bg-slate-50/80 dark:bg-slate-950/45 text-slate-700 dark:text-slate-350 border border-slate-200/80 dark:border-slate-800/80 p-4 rounded-2xl break-all whitespace-pre-wrap shadow-inner max-h-48 overflow-y-auto scrollbar-thin">
                     {selectedLog.Details || 'No auxiliary details mapped to this event.'}
-                  </p>
+                  </div>
                 </div>
+
               </div>
 
             </div>
 
             {/* Modal Footer */}
-            <div className="mt-6 pt-4 border-t border-slate-100 dark:border-slate-800/60 flex justify-end">
+            <div className="mt-5 pt-4 border-t border-slate-100 dark:border-slate-800/60 flex justify-end shrink-0">
               <button
                 onClick={() => setSelectedLog(null)}
-                className="px-6 py-2.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-900 dark:hover:bg-slate-800 text-slate-750 dark:text-slate-300 rounded-2xl text-xs font-extrabold uppercase tracking-wider transition active:scale-98 cursor-pointer"
+                className="px-6 py-2.5 bg-slate-150 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-750 text-slate-750 dark:text-slate-300 rounded-2xl text-xs font-extrabold uppercase tracking-wider transition active:scale-98 cursor-pointer"
               >
                 Close Inspector
               </button>
             </div>
 
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
     </div>

@@ -55,6 +55,7 @@ func SetupRoutes(app *fiber.App) {
 
 	// General Auth Group
 	api := app.Group("/api")
+	api.Get("/oidc/client/:client_id", authController.GetClientPublicInfo)
 	api.Post("/register", apiLimiter, authController.Register)
 	api.Post("/verify-email", apiLimiter, authController.VerifyEmail)
 	api.Post("/resend-otp", apiLimiter, authController.ResendOTP)
@@ -74,6 +75,7 @@ func SetupRoutes(app *fiber.App) {
 	protected := app.Group("/")
 	protected.Use(middlewares.AuthMiddleware)
 	protected.Get("/userinfo", authController.UserInfo)
+	protected.Post("/api/oidc/consent", authController.SubmitConsent)
 	protected.Get("/api/profile", authController.GetProfile)
 	protected.Put("/api/profile", authController.UpdateProfile)
 	protected.Get("/api/mfa/setup", authController.SetupMfa)

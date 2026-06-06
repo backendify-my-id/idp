@@ -73,8 +73,8 @@ func (c *AuthController) CreateClient(ctx *fiber.Ctx) error {
 		return utils.SendError(ctx, fiber.StatusBadRequest, "Invalid request payload")
 	}
 
-	if req.ClientName == "" || req.AppClientID == "" {
-		return utils.SendError(ctx, fiber.StatusBadRequest, "Client name and client ID are required")
+	if req.ClientName == "" {
+		return utils.SendError(ctx, fiber.StatusBadRequest, "Client name is required")
 	}
 
 	creatorUserIDStr := getLocalString(ctx, "user_id")
@@ -364,4 +364,42 @@ func (c *AuthController) GetAuditLogs(ctx *fiber.Ctx) error {
 	}
 
 	return utils.SendSuccess(ctx, fiber.StatusOK, "Audit logs retrieved successfully", response)
+}
+
+func (c *AuthController) RegenerateClientSecret(ctx *fiber.Ctx) error {
+	id := ctx.Params("id")
+	if id == "" {
+		return utils.SendError(ctx, fiber.StatusBadRequest, "Client UUID is required")
+	}
+
+	userIDStr := getLocalString(ctx, "user_id")
+	rolesLocal := ctx.Locals("roles")
+	isAdmin := false
+	if rolesSlice, ok := rolesLocal.([]interface{}); ok {
+		for _, r := range rolesSlice {
+			if r == "admin" {
+				isAdmin = true
+				break
+			}
+		}
+	} else if rolesStringSlice, ok := rolesLocal.([]string); ok {
+		for _, r := range rolesStringSlice {
+			if r == "admin" {
+				isAdmin = true
+				break
+			}
+		}
+	}
+
+	rawSecret, err := c.authService.RegenerateClientSecret(id, userIDStr, isAdmin)
+	if err != nil {
+		return utils.SendError(ctx, fiber.StatusBadRequest, err.Error())
+	}
+
+	adminUserID := getLocalString(ctx, "user_id")
+	auditLog(ctx, "REGENERATE_OIDC_CLIENT_SECRET", "", adminUserID, fmt.Sprintf("ClientID: %s", id))
+
+	return utils.SendSuccess(ctx, fiber.StatusOK, "Client secret regenerated successfully", fiber.Map{
+		"client_secret": rawSecret,
+	})
 }

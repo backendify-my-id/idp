@@ -67,14 +67,14 @@ func SetupRoutes(app *fiber.App) {
 	api.Post("/logout", authController.Logout) // Single Logout (SLO)
 
 	// OIDC & OAuth2 Endpoints
-	app.Get("/authorize", authController.Authorize)
-	app.Post("/token", authController.Token)
+	app.Get("/oauth/authorize", authController.Authorize)
+	app.Post("/oauth/token", authController.Token)
 	app.Get("/.well-known/openid-configuration", authController.OpenIDConfiguration)
 
 	// Protected Endpoints
 	protected := app.Group("/")
 	protected.Use(middlewares.AuthMiddleware)
-	protected.Get("/userinfo", authController.UserInfo)
+	protected.Get("/api/userinfo", authController.UserInfo)
 	protected.Post("/api/oidc/consent", authController.SubmitConsent)
 	protected.Get("/api/profile", authController.GetProfile)
 	protected.Put("/api/profile", authController.UpdateProfile)
@@ -106,18 +106,18 @@ func SetupRoutes(app *fiber.App) {
 	// Admin & Support Protected Endpoints
 	admin := app.Group("/api/admin")
 	admin.Use(middlewares.AuthMiddleware)
-	
+
 	// Client application registry management (admin & developer)
 	admin.Get("/clients", middlewares.RequireRole("admin", "developer"), authController.GetClients)
 	admin.Post("/clients", middlewares.RequireRole("admin", "developer"), authController.CreateClient)
 	admin.Put("/clients/:id", middlewares.RequireRole("admin", "developer"), authController.UpdateClient)
 	admin.Delete("/clients/:id", middlewares.RequireRole("admin", "developer"), authController.DeleteClient)
-	
+	admin.Post("/clients/:id/regenerate-secret", middlewares.RequireRole("admin", "developer"), authController.RegenerateClientSecret)
+
 	admin.Get("/users", middlewares.RequireRole("admin", "idp_support"), authController.GetUsers)
-	admin.Put("/users/:id/role", middlewares.RequireRole("admin"), authController.UpdateUserRole) // strictly admin
+	admin.Put("/users/:id/role", middlewares.RequireRole("admin"), authController.UpdateUserRole)                    // strictly admin
 	admin.Put("/users/:id/status", middlewares.RequireRole("admin", "idp_support"), authController.UpdateUserStatus) // support can ban/unban/suspend
 	admin.Put("/users/:id/unlock", middlewares.RequireRole("admin", "idp_support"), authController.UnlockUser)
 	admin.Delete("/users/:id", middlewares.RequireRole("admin"), authController.DeleteUser) // strictly admin delete
 	admin.Get("/audit-logs", middlewares.RequireRole("admin"), authController.GetAuditLogs)
 }
-

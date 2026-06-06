@@ -73,7 +73,7 @@ func (s *AuthService) AuthenticateUser(email, password string) (*models.User, er
 	return &user, nil
 }
 
-func (s *AuthService) GenerateToken(user *models.User, scope string, sessionID string) (string, error) {
+func (s *AuthService) GenerateTokenWithDuration(user *models.User, scope string, sessionID string, duration time.Duration) (string, error) {
 	roles, err := s.GetUserRoles(user.ID)
 	if err != nil {
 		roles = []string{"user"}
@@ -98,7 +98,7 @@ func (s *AuthService) GenerateToken(user *models.User, scope string, sessionID s
 		"sub":   user.ID.String(),
 		"email": user.Email,
 		"jti":   uuid.New().String(),
-		"exp":   time.Now().Add(time.Hour * 1).Unix(), // 1 hour expiration
+		"exp":   time.Now().Add(duration).Unix(),
 	}
 
 	if sessionID != "" {
@@ -118,6 +118,10 @@ func (s *AuthService) GenerateToken(user *models.User, scope string, sessionID s
 	}
 
 	return t, nil
+}
+
+func (s *AuthService) GenerateToken(user *models.User, scope string, sessionID string) (string, error) {
+	return s.GenerateTokenWithDuration(user, scope, sessionID, time.Hour*1)
 }
 
 func (s *AuthService) SendVerificationOTP(email string) (string, error) {

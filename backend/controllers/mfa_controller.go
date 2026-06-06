@@ -18,8 +18,9 @@ type MfaCodeRequest struct {
 }
 
 type MfaLoginRequest struct {
-	MfaToken string `json:"mfa_token"`
-	Code     string `json:"code"`
+	MfaToken   string `json:"mfa_token"`
+	Code       string `json:"code"`
+	RememberMe bool   `json:"remember_me"`
 }
 
 func (c *AuthController) SetupMfa(ctx *fiber.Ctx) error {
@@ -161,11 +162,21 @@ func (c *AuthController) VerifyMfaLogin(ctx *fiber.Ctx) error {
 		return utils.SendError(ctx, fiber.StatusInternalServerError, "Failed to generate token")
 	}
 
+	cookieDuration := 24 * time.Hour
+	if req.RememberMe {
+		cookieDuration = 7 * 24 * time.Hour
+	}
+
+	cookieToken, errCookie := c.authService.GenerateTokenWithDuration(&user, "", sessionID, cookieDuration)
+	if errCookie != nil {
+		cookieToken = finalToken
+	}
+
 	// Also set cookie
 	ctx.Cookie(&fiber.Cookie{
 		Name:     "jwt",
-		Value:    finalToken,
-		Expires:  time.Now().Add(time.Hour * 1),
+		Value:    cookieToken,
+		Expires:  time.Now().Add(cookieDuration),
 		HTTPOnly: true,
 		Secure:   false,
 		SameSite: "Lax",

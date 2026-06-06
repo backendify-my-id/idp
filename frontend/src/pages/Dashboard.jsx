@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { getProfile, updateProfile, getMfaSetup, enableMfa, disableMfa,
   getClients, createClient, updateClient, deleteClient, getUsers, updateUserRole, updateUserStatus, unlockUser, deleteUser,
-  getNotifications, createNotification, markNotificationsRead
+  getNotifications, createNotification, markNotificationsRead, regenerateClientSecret
 } from '../services/api';
 import AlertModal from '../components/AlertModal';
 import DashboardLayout from '../layouts/DashboardLayout';
@@ -56,6 +56,7 @@ const Dashboard = ({ token, onLogout }) => {
   const [clientId, setClientId] = useState('');
   const [isPkceRequired, setIsPkceRequired] = useState(false);
   const [redirectUrls, setRedirectUrls] = useState(['']);
+  const [newlyCreatedClient, setNewlyCreatedClient] = useState(null);
 
   // Global Alert State
   const [alert, setAlert] = useState({ isOpen: false, title: '', message: '', type: 'info' });
@@ -357,16 +358,19 @@ const Dashboard = ({ token, onLogout }) => {
     });
 
     if (res.success) {
-      addNotification(`OIDC Registry: Client "${res.data.client_name}" registered successfully.`);
+      const registeredName = res.data.client?.ClientName || res.data.client?.client_name || clientName;
+      const registeredId = res.data.client?.AppClientID || res.data.client?.client_id || clientId;
+      const clientSecret = res.data.client_secret || 'N/A';
+
+      addNotification(`OIDC Registry: Client "${registeredName}" registered successfully.`);
       setClientName('');
       setClientId('');
       setIsPkceRequired(false);
       setRedirectUrls(['']);
-      setAlert({
-        isOpen: true,
-        title: 'Client Registered',
-        message: `OIDC Client "${res.data.client_name}" successfully configured! Secret key generated.`,
-        type: 'success'
+      setNewlyCreatedClient({
+        client_name: registeredName,
+        client_id: registeredId,
+        client_secret: clientSecret
       });
       fetchClients();
     } else {
@@ -401,7 +405,29 @@ const Dashboard = ({ token, onLogout }) => {
       return false;
     }
   };
+  const handleRegenerateSecret = async (id, name) => {
+    const confirm = window.confirm(`Apakah Anda yakin ingin mengatur ulang Client Secret untuk "${name}"?\nKunci rahasia lama akan segera dinonaktifkan.`);
+    if (!confirm) return;
 
+    const res = await regenerateClientSecret(token, id);
+    if (res.success) {
+      addNotification(`OIDC Registry: Client "${name}" secret key rotated successfully.`);
+      setNewlyCreatedClient({
+        client_name: name,
+        client_id: clientsList.find(c => c.id === id)?.client_id || 'N/A',
+        client_secret: res.data.client_secret || 'N/A'
+      });
+      setAlert({
+        isOpen: true,
+        title: 'Secret Rotated Successfully',
+        message: `Client Secret untuk "${name}" telah berhasil diperbarui! Kunci rahasia baru telah dimunculkan di halaman atas. Harap simpan segera.`,
+        type: 'success'
+      });
+      fetchClients();
+    } else {
+      setAlert({ isOpen: true, title: 'Error', message: res.message, type: 'error' });
+    }
+  };
   const handleAddUrlField = () => setRedirectUrls([...redirectUrls, '']);
   const handleRemoveUrlField = (idx) => setRedirectUrls(redirectUrls.filter((_, i) => i !== idx));
 
@@ -557,6 +583,9 @@ const Dashboard = ({ token, onLogout }) => {
               onDeleteClient={handleDeleteClientClick}
               onAddUrlField={handleAddUrlField}
               onRemoveUrlField={handleRemoveUrlField}
+              newlyCreatedClient={newlyCreatedClient}
+              clearNewlyCreatedClient={() => setNewlyCreatedClient(null)}
+              onRegenerateSecret={handleRegenerateSecret}
             />
           )}
 

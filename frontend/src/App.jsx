@@ -23,7 +23,7 @@ const MainApp = () => {
       const redirectUri = params.get('redirect_uri');
       
       if (clientId && redirectUri && window.location.pathname !== '/consent') {
-        const authorizeUrl = `http://localhost:8800/authorize${window.location.search}&token=${token}`;
+        const authorizeUrl = `http://localhost:8800/oauth/authorize${window.location.search}&token=${token}`;
         window.location.href = authorizeUrl;
       }
     }

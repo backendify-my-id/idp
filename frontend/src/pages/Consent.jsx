@@ -4,37 +4,37 @@ import AuthLayouts from '../layouts/AuthLayouts';
 
 const SCOPE_META = {
   openid: {
-    title: 'ID Unik Identitas',
-    desc: 'Mengakses ID unik akun Anda untuk memverifikasi autentikasi.',
+    title: 'ID Identitas Digital',
+    desc: 'Mengakses pengenal unik Anda agar sistem mengenali sesi masuk Anda dengan aman.',
     icon: (
-      <svg className="w-5 h-5 text-indigo-500" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+      <svg className="w-5 h-5 text-indigo-500 dark:text-indigo-400" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
       </svg>
     )
   },
   email: {
-    title: 'Alamat Email',
-    desc: 'Melihat alamat email utama yang terdaftar pada akun Anda.',
+    title: 'Alamat Email Utama',
+    desc: 'Melihat alamat email utama yang terdaftar untuk keperluan verifikasi dan kontak.',
     icon: (
-      <svg className="w-5 h-5 text-emerald-500" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+      <svg className="w-5 h-5 text-emerald-500 dark:text-emerald-400" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75" />
       </svg>
     )
   },
   profile: {
-    title: 'Profil Lengkap',
-    desc: 'Membaca nama lengkap, bio, dan foto profil Anda.',
+    title: 'Profil Pengguna',
+    desc: 'Membaca informasi profil umum seperti nama lengkap, bio singkat, dan foto profil.',
     icon: (
-      <svg className="w-5 h-5 text-purple-500" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 12l8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25" />
+      <svg className="w-5 h-5 text-purple-500 dark:text-purple-400" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M17.982 18.725A7.488 7.488 0 0012 15.75a7.488 7.488 0 00-5.982 2.975m11.963 0a9 9 0 10-11.963 0m11.963 0A8.966 8.966 0 0112 21a8.966 8.966 0 01-5.982-2.275M15 9.75a3 3 0 11-6 0 3 3 0 016 0z" />
       </svg>
     )
   },
   roles: {
-    title: 'Peran & Akses',
-    desc: 'Melihat grup kewenangan atau peran (roles) akun Anda.',
+    title: 'Peran & Hak Akses',
+    desc: 'Membaca grup otoritas atau peran (roles) akun Anda di dalam sistem.',
     icon: (
-      <svg className="w-5 h-5 text-amber-500" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+      <svg className="w-5 h-5 text-amber-500 dark:text-amber-400" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.57-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z" />
       </svg>
     )
@@ -93,7 +93,7 @@ export default function Consent() {
       if (res && res.success) {
         // Redirect back to backend authorize endpoint with original query parameters
         // The backend will now see the granted consent and redirect to client redirect_uri
-        window.location.href = `http://localhost:8800/authorize${window.location.search}&token=${token}`;
+        window.location.href = `http://localhost:8800/oauth/authorize${window.location.search}&token=${token}`;
       } else {
         setError(res.message || 'Failed to register scope consent.');
         setSubmitting(false);
@@ -129,84 +129,155 @@ export default function Consent() {
 
   return (
     <AuthLayouts>
-      <div className="w-full min-h-screen flex items-center justify-center p-6 bg-slate-50 dark:bg-[#090d16] transition-colors relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-[300px] h-[300px] rounded-full bg-indigo-500/5 dark:bg-indigo-500/8 blur-3xl pointer-events-none" />
-        <div className="absolute bottom-0 left-0 w-[200px] h-[200px] rounded-full bg-purple-500/4 dark:bg-purple-500/6 blur-3xl pointer-events-none" />
+      <div className="w-full min-h-screen flex items-center justify-center p-6 bg-slate-55 dark:bg-[#090d16] transition-colors relative overflow-hidden">
+        {/* Glow Effects */}
+        <div className="absolute top-1/4 left-1/4 w-[400px] h-[400px] rounded-full bg-indigo-500/10 dark:bg-indigo-500/15 blur-[100px] pointer-events-none animate-pulse" style={{ animationDuration: '8s' }} />
+        <div className="absolute bottom-1/4 right-1/4 w-[350px] h-[350px] rounded-full bg-purple-500/8 dark:bg-purple-500/12 blur-[100px] pointer-events-none animate-pulse" style={{ animationDuration: '12s' }} />
 
-        <div className="w-full max-w-md bg-white dark:bg-[#0e1322]/80 border border-slate-200/60 dark:border-slate-800/85 rounded-3xl p-6 sm:p-8 shadow-2xl backdrop-blur-md animate-scale-up text-left">
+        <div className="w-full max-w-[460px] bg-white dark:bg-[#0e1322]/80 border border-slate-200/60 dark:border-slate-800/85 rounded-[32px] p-8 sm:p-9 shadow-2xl backdrop-blur-md animate-scale-up text-left relative z-10">
           
-          {/* Header */}
-          <div className="flex items-center gap-4 mb-6">
-            <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-indigo-500 to-purple-600 flex items-center justify-center shadow-lg text-white font-black text-xl shrink-0">
-              {clientInfo?.client_name ? clientInfo.client_name[0].toUpperCase() : 'A'}
+          {/* Integration Bridge Graphic */}
+          <div className="flex items-center justify-center gap-6 mb-8 mt-2 select-none relative">
+            <div className="absolute inset-0 bg-indigo-500/5 dark:bg-indigo-500/10 rounded-full filter blur-xl scale-75 -z-10 animate-pulse" />
+
+            {/* Left App: Backendify (IDP) */}
+            <div className="relative group">
+              <div className="absolute -inset-1 rounded-2xl bg-gradient-to-r from-indigo-500 to-blue-600 opacity-20 dark:opacity-30 blur-sm group-hover:opacity-40 transition-opacity duration-300" />
+              <div className="w-16 h-16 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 flex items-center justify-center shadow-lg relative z-10 transition-transform duration-300 group-hover:scale-105">
+                <svg className="w-9 h-9 text-indigo-600 dark:text-indigo-400" fill="none" stroke="currentColor" strokeWidth="2.25" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.57-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z" />
+                </svg>
+              </div>
             </div>
-            <div>
-              <h2 className="text-base sm:text-lg font-black text-slate-800 dark:text-white tracking-tight">Izin Akses Aplikasi</h2>
-              <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 mt-0.5">
-                <span className="text-indigo-600 dark:text-indigo-400 font-bold">{clientInfo?.client_name || 'Aplikasi Pihak Ketiga'}</span> meminta akses ke akun Anda.
-              </p>
+
+            {/* Connection Bridge */}
+            <div className="flex-1 flex items-center justify-center relative">
+              <div className="w-full h-0.5 border-t-2 border-dashed border-slate-200 dark:border-slate-700/80 absolute" />
+              <div className="absolute w-2 h-2 rounded-full bg-indigo-500 animate-ping" />
+              <div className="w-8 h-8 rounded-full bg-slate-50 dark:bg-slate-850 border border-slate-200 dark:border-slate-750 flex items-center justify-center shadow-md relative z-10">
+                <svg className="w-4 h-4 text-indigo-605 dark:text-indigo-400" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M10 1a4.5 4.5 0 00-4.5 4.5V9H5a2 2 0 00-2 2v6a2 2 0 002 2h10a2 2 0 002-2v-6a2 2 0 00-2-2h-.5V5.5A4.5 4.5 0 0010 1zm3 8V5.5a3 3 0 10-6 0V9h6z" clipRule="evenodd" />
+                </svg>
+              </div>
+            </div>
+
+            {/* Right App: Requesting Client App */}
+            <div className="relative group">
+              <div className="absolute -inset-1 rounded-2xl bg-gradient-to-r from-purple-500 to-pink-500 opacity-20 dark:opacity-30 blur-sm group-hover:opacity-40 transition-opacity duration-300" />
+              <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-purple-650 to-pink-500 flex items-center justify-center shadow-lg relative z-10 transition-transform duration-300 group-hover:scale-105 text-white font-black text-2xl tracking-tighter">
+                {clientInfo?.client_name ? clientInfo.client_name[0].toUpperCase() : 'A'}
+              </div>
             </div>
           </div>
 
+          {/* Trust Signal Badge */}
+          <div className="flex justify-center mb-5">
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-extrabold tracking-wide uppercase bg-emerald-500/10 dark:bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 dark:border-emerald-500/20 shadow-sm">
+              <svg className="w-3.5 h-3.5 shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clipRule="evenodd" />
+              </svg>
+              Aplikasi Terverifikasi
+            </div>
+          </div>
+
+          {/* Headline Text */}
+          <div className="text-center mb-8">
+            <h2 className="text-xl sm:text-2xl font-black text-slate-800 dark:text-white tracking-tight leading-tight mb-2">
+              Hubungkan Aplikasi
+            </h2>
+            <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 max-w-sm mx-auto leading-relaxed">
+              Aplikasi <strong className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 font-extrabold text-sm">{clientInfo?.client_name || 'Aplikasi Pihak Ketiga'}</strong> meminta izin untuk mengakses detail akun Backendify Anda.
+            </p>
+          </div>
+
           {error && (
-            <div className="p-4 bg-rose-50 border border-rose-100 dark:bg-rose-950/20 dark:border-rose-900/30 rounded-2xl mb-5">
+            <div className="p-4 bg-rose-50 border border-rose-100 dark:bg-rose-950/20 dark:border-rose-900/30 rounded-2xl mb-6">
               <p className="text-xs font-bold text-rose-600 dark:text-rose-400 leading-normal">{error}</p>
             </div>
           )}
 
           {/* Scope list explanation */}
-          <p className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-3.5 select-none">
-            Informasi yang akan dibagikan:
-          </p>
+          <div className="mb-6">
+            <div className="flex items-center justify-between mb-3.5 select-none">
+              <span className="text-[11px] font-extrabold text-slate-700 dark:text-slate-350 uppercase tracking-widest">
+                Izin yang Diminta
+              </span>
+              <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500">
+                {scopes.length} Akses diperlukan
+              </span>
+            </div>
 
-          <div className="space-y-3 mb-6 max-h-[280px] overflow-y-auto pr-1 scrollbar-thin">
-            {scopes.map((scope) => {
-              const meta = SCOPE_META[scope] || {
-                title: scope.toUpperCase(),
-                desc: `Izin akses khusus untuk cakupan ${scope}.`,
-                icon: (
-                  <svg className="w-5 h-5 text-slate-500" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 21l8.97-8.97m-8.97 8.97L15 15M2.25 12l8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75" />
-                  </svg>
-                )
-              };
+            <div className="space-y-3 max-h-[260px] overflow-y-auto pr-1.5 scrollbar-thin">
+              {scopes.map((scope) => {
+                const meta = SCOPE_META[scope] || {
+                  title: scope.toUpperCase(),
+                  desc: `Izin akses khusus untuk cakupan ${scope}.`,
+                  icon: (
+                    <svg className="w-5 h-5 text-slate-500" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 21l8.97-8.97m-8.97 8.97L15 15M2.25 12l8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75" />
+                    </svg>
+                  )
+                };
 
-              return (
-                <div key={scope} className="flex gap-3.5 p-3 rounded-2xl bg-slate-50/50 dark:bg-slate-900/30 border border-slate-200/30 dark:border-slate-800/40 hover:border-slate-200 dark:hover:border-slate-800 transition-colors">
-                  <div className="w-9 h-9 rounded-xl bg-white dark:bg-slate-950/45 border border-slate-100 dark:border-slate-850 flex items-center justify-center shrink-0">
-                    {meta.icon}
+                return (
+                  <div key={scope} className="group flex items-start gap-4 p-4 rounded-2xl bg-slate-50/50 dark:bg-slate-900/30 border border-slate-200/30 dark:border-slate-800/40 hover:border-indigo-500/35 dark:hover:border-indigo-500/25 hover:bg-slate-50 dark:hover:bg-slate-900/50 transition-all duration-300 shadow-sm hover:shadow-md">
+                    <div className="w-10 h-10 rounded-xl bg-white dark:bg-slate-950 border border-slate-100 dark:border-slate-800 flex items-center justify-center shrink-0 shadow-inner group-hover:scale-105 transition-transform duration-300">
+                      {meta.icon}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <h4 className="text-xs font-bold text-slate-800 dark:text-white leading-tight group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
+                        {meta.title}
+                      </h4>
+                      <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1.5 leading-normal font-semibold">
+                        {meta.desc}
+                      </p>
+                    </div>
+                    <div className="shrink-0 self-center">
+                      <span className="w-5 h-5 rounded-full bg-emerald-500/10 dark:bg-emerald-500/20 flex items-center justify-center border border-emerald-500/20">
+                        <svg className="w-3 h-3 text-emerald-600 dark:text-emerald-400" fill="none" stroke="currentColor" strokeWidth="3" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                        </svg>
+                      </span>
+                    </div>
                   </div>
-                  <div>
-                    <h4 className="text-xs font-bold text-slate-800 dark:text-white leading-tight">{meta.title}</h4>
-                    <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1 leading-normal font-semibold">{meta.desc}</p>
-                  </div>
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
           </div>
 
-          <div className="text-[10px] text-slate-400 leading-relaxed font-semibold mb-6 select-none">
-            Setelah disetujui, Anda akan langsung dialihkan kembali ke aplikasi klien. Anda dapat mencabut izin akses ini sewaktu-waktu melalui halaman Pengaturan Profil Backendify.
+          {/* Secure Encryption Shield Indicator Banner */}
+          <div className="flex items-start gap-2.5 p-3 rounded-2xl bg-slate-500/5 dark:bg-slate-400/5 border border-slate-200/40 dark:border-slate-800/40 mb-8 select-none">
+            <svg className="w-4 h-4 text-indigo-500 dark:text-indigo-400 shrink-0 mt-0.5" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
+            </svg>
+            <span className="text-[10px] text-slate-500 dark:text-slate-400 leading-normal font-semibold">
+              <strong>Koneksi Terenkripsi:</strong> Backendify tidak membagikan kata sandi Anda dengan aplikasi ini. Akses dapat dicabut kapan saja melalui halaman Profil.
+            </span>
           </div>
 
           {/* Action buttons */}
-          <div className="flex gap-3">
+          <div className="flex gap-4">
             <button
               onClick={handleCancel}
               disabled={submitting}
-              className="flex-1 py-3 border border-slate-250 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-900 text-slate-700 dark:text-slate-350 rounded-2xl text-xs font-extrabold uppercase tracking-wider transition active:scale-98 cursor-pointer disabled:opacity-40 disabled:pointer-events-none text-center"
+              className="flex-1 py-3.5 bg-transparent hover:bg-slate-100 dark:hover:bg-slate-800/60 text-slate-500 dark:text-slate-450 border border-slate-200 dark:border-slate-800/80 hover:border-slate-300 dark:hover:border-slate-700 transition-all duration-300 active:scale-95 font-extrabold uppercase tracking-wider text-xs rounded-2xl cursor-pointer disabled:opacity-40 disabled:pointer-events-none text-center"
             >
               Batal
             </button>
             <button
               onClick={handleApprove}
               disabled={submitting || error !== ''}
-              className="flex-2 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl text-xs font-extrabold uppercase tracking-wider transition shadow-md hover:shadow-lg active:scale-98 cursor-pointer disabled:opacity-40 disabled:pointer-events-none text-center flex items-center justify-center"
+              className="flex-[2] py-3.5 bg-gradient-to-r from-indigo-600 via-indigo-750 to-violet-700 hover:from-indigo-550 hover:via-indigo-650 hover:to-violet-650 text-white shadow-[0_4px_14px_rgba(79,70,229,0.35)] dark:shadow-[0_4px_20px_rgba(99,102,241,0.25)] hover:shadow-[0_6px_20px_rgba(79,70,229,0.45)] active:scale-95 transition-all duration-300 font-extrabold uppercase tracking-wider text-xs rounded-2xl cursor-pointer disabled:opacity-40 disabled:pointer-events-none text-center flex items-center justify-center gap-2"
             >
               {submitting ? (
                 <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
               ) : (
-                'Setujui & Lanjutkan'
+                <>
+                  <span>Setujui & Lanjutkan</span>
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
+                  </svg>
+                </>
               )}
             </button>
           </div>
@@ -216,3 +287,4 @@ export default function Consent() {
     </AuthLayouts>
   );
 }
+

@@ -146,10 +146,18 @@ func (s *AuthService) GetClients(ownerIDStr string) ([]ClientDTO, error) {
 }
 
 func (s *AuthService) CreateClient(name string, appClientID string, isPkceRequired bool, redirectURLs []string, ownerID *uuid.UUID) (*models.Client, string, error) {
-	var count int64
-	config.DB.Model(&models.Client{}).Where("client_id = ?", appClientID).Count(&count)
-	if count > 0 {
-		return nil, "", errors.New("client ID already registered")
+	if appClientID == "" {
+		bytesClient := make([]byte, 12)
+		if _, err := rand.Read(bytesClient); err != nil {
+			return nil, "", err
+		}
+		appClientID = "client_" + hex.EncodeToString(bytesClient)
+	} else {
+		var count int64
+		config.DB.Model(&models.Client{}).Where("client_id = ?", appClientID).Count(&count)
+		if count > 0 {
+			return nil, "", errors.New("client ID already registered")
+		}
 	}
 
 	bytes := make([]byte, 24)
@@ -287,4 +295,40 @@ func (s *AuthService) IsClientOwner(clientIDStr string, userIDStr string) (bool,
 		return false, nil
 	}
 	return client.UserID.String() == userIDStr, nil
+}
+
+func (s *AuthService) RegenerateClientSecret(clientIDStr string, ownerIDStr string, isAdmin bool) (string, error) {
+	id, err := uuid.Parse(clientIDStr)
+	if err != nil {
+		return "", errors.New("invalid client ID")
+	}
+
+	var client models.Client
+	if err := config.DB.First(&client, id).Error; err != nil {
+		return "", errors.New("client not found")
+	}
+
+	// Permission check if not admin
+	if !isAdmin && client.UserID != nil && client.UserID.String() != ownerIDStr {
+		return "", errors.New("unauthorized to manage this client")
+	}
+
+	// Generate new secret
+	bytes := make([]byte, 24)
+	if _, err := rand.Read(bytes); err != nil {
+		return "", err
+	}
+	rawSecret := "bcy_" + hex.EncodeToString(bytes)
+
+	hashedSecret, err := bcrypt.GenerateFromPassword([]byte(rawSecret), bcrypt.DefaultCost)
+	if err != nil {
+		return "", err
+	}
+
+	client.ClientSecretHash = string(hashedSecret)
+	if err := config.DB.Save(&client).Error; err != nil {
+		return "", err
+	}
+
+	return rawSecret, nil
 }

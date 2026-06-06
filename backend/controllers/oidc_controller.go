@@ -310,9 +310,9 @@ func (c *AuthController) OpenIDConfiguration(ctx *fiber.Ctx) error {
 	base := appURL()
 	return ctx.JSON(fiber.Map{
 		"issuer":                                base,
-		"authorization_endpoint":                base + "/authorize",
-		"token_endpoint":                        base + "/token",
-		"userinfo_endpoint":                     base + "/userinfo",
+		"authorization_endpoint":                base + "/oauth/authorize",
+		"token_endpoint":                        base + "/oauth/token",
+		"userinfo_endpoint":                     base + "/api/userinfo",
 		"jwks_uri":                              base + "/.well-known/jwks.json",
 		"response_types_supported":              []string{"code"},
 		"subject_types_supported":               []string{"public"},

@@ -36,6 +36,7 @@ type LoginRequest struct {
 	Email        string `json:"email"`
 	Password     string `json:"password"`
 	CaptchaToken string `json:"captcha_token"`
+	RememberMe   bool   `json:"remember_me"`
 }
 
 func (c *AuthController) Register(ctx *fiber.Ctx) error {
@@ -219,11 +220,21 @@ func (c *AuthController) Login(ctx *fiber.Ctx) error {
 		return utils.SendError(ctx, fiber.StatusInternalServerError, "Failed to generate token")
 	}
 
+	cookieDuration := 24 * time.Hour
+	if req.RememberMe {
+		cookieDuration = 7 * 24 * time.Hour
+	}
+
+	cookieToken, errCookie := c.authService.GenerateTokenWithDuration(user, "", sessionID, cookieDuration)
+	if errCookie != nil {
+		cookieToken = token
+	}
+
 	// Also set cookie for easier OIDC web-redirection flow!
 	ctx.Cookie(&fiber.Cookie{
 		Name:     "jwt",
-		Value:    token,
-		Expires:  time.Now().Add(time.Hour * 1),
+		Value:    cookieToken,
+		Expires:  time.Now().Add(cookieDuration),
 		HTTPOnly: true,
 		Secure:   false, // Set to true in production with HTTPS
 		SameSite: "Lax",

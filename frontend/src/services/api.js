@@ -49,8 +49,8 @@ const authConfig = (token) => ({
 
 // ─── Public Auth Endpoints ────────────────────────────────────────────────────
 
-export const loginUser = (email, password) =>
-  apiClient.post('/login', { email, password });
+export const loginUser = (email, password, rememberMe = false) =>
+  apiClient.post('/login', { email, password, remember_me: rememberMe });
 
 export const registerUser = (email, password) =>
   apiClient.post('/register', { email, password });
@@ -67,8 +67,8 @@ export const forgotPassword = (email) =>
 export const resetPassword = (email, otp, newPassword) =>
   apiClient.post('/reset-password', { email, otp, new_password: newPassword });
 
-export const loginMfa = (mfaToken, code) =>
-  apiClient.post('/login/mfa', { mfa_token: mfaToken, code });
+export const loginMfa = (mfaToken, code, rememberMe = false) =>
+  apiClient.post('/login/mfa', { mfa_token: mfaToken, code, remember_me: rememberMe });
 
 // ─── Protected Endpoints ──────────────────────────────────────────────────────
 
@@ -125,6 +125,9 @@ export const updateClient = (token, id, clientData) =>
 
 export const deleteClient = (token, id) =>
   apiClient.delete(`/admin/clients/${id}`, authConfig(token));
+
+export const regenerateClientSecret = (token, id) =>
+  apiClient.post(`/admin/clients/${id}/regenerate-secret`, {}, authConfig(token));
 
 export const getUsers = (token) =>
   apiClient.get('/admin/users', authConfig(token));

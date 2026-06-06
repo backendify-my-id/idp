@@ -8,6 +8,7 @@ import VerificationCodeInput from '../components/VerificationCodeInput';
 const Login = ({ onLoginSuccess, onNavigateToRegister, onNavigateToResetPassword, onNavigateToVerifyEmail }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [rememberMe, setRememberMe] = useState(false);
   
   // MFA Login states
   const [isMfaRequired, setIsMfaRequired] = useState(false);
@@ -24,7 +25,7 @@ const Login = ({ onLoginSuccess, onNavigateToRegister, onNavigateToResetPassword
 
     if (isMfaRequired) {
       // Submit MFA Code
-      const res = await loginMfa(mfaToken, mfaCode);
+      const res = await loginMfa(mfaToken, mfaCode, rememberMe);
       setIsLoading(false);
 
       if (res.success && res.data?.access_token) {
@@ -49,7 +50,7 @@ const Login = ({ onLoginSuccess, onNavigateToRegister, onNavigateToResetPassword
       }
     } else {
       // Submit normal Login
-      const res = await loginUser(email, password);
+      const res = await loginUser(email, password, rememberMe);
       setIsLoading(false);
 
       if (res.success) {
@@ -175,6 +176,18 @@ const Login = ({ onLoginSuccess, onNavigateToRegister, onNavigateToResetPassword
                     placeholder="••••••••••••"
                     className="mt-1 block w-full px-4 py-3 border border-slate-200 dark:border-slate-800 bg-white/50 backdrop-blur-sm rounded-2xl text-sm font-semibold transition-all text-slate-900 dark:text-white"
                   />
+                </div>
+
+                <div className="flex items-center justify-between py-1 select-none">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={rememberMe}
+                      onChange={(e) => setRememberMe(e.target.checked)}
+                      className="w-4 h-4 rounded border-slate-200 dark:border-slate-800 text-indigo-600 focus:ring-indigo-500 accent-indigo-650 bg-white/50"
+                    />
+                    <span className="text-xs font-bold text-slate-500 dark:text-slate-400">Remember me</span>
+                  </label>
                 </div>
 
                 <button
